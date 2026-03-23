@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🍔 Aplikasi Self-Ordering Restoran (Desktop & Mobile)
 
-## Getting Started
+Aplikasi pemesanan makanan layaknya aplikasi populer khusus meja restoran, di mana pelanggan bisa langsung melihat katalog digital, memilih menu, keranjang, dan melakukan pembayaran instan secara mandiri melalui *smartphone* mereka tanpa perlu memanggil pelayan.
 
-First, run the development server:
+## 🔥 Fitur Unggulan
+- **UI/UX Premium (Desain Ala ShopeeFood)**: Bersih, elegan, responsif (`Mobile-First`), dominan putih dengan aksen warna "Oranye Cerah" yang menggugah selera.
+- **Keranjang Reaktif (Zustand)**: Pilihan menu dan perhitungan harga langsung difilter tanpa ada proses memuat ulang *(loading/refresh)* halaman.
+- **Integrasi Pembayaran "White-Label" (Midtrans Core API)**:
+  - Pelanggan tidak akan dilempar ke situs web bank / Midtrans (Tanpa Pop-Up/Snap iframe).
+  - Melayani pembayaran **GoPay, DANA, OVO**, **QRIS (Otomatis)**, dan **Transfer Virtual Account**.
+  - **Tampilan Sendiri (Native UX)**: QR Code dari dompet digital langsung digambar *(rendered)* menyatu ke dalam desain resi/struk digital (E-Receipt) buatan kita sendiri.
 
+## 💻 Teknologi yang Digunakan
+- **Framework Utama**: [Next.js (App Router)](https://nextjs.org/)
+- **Desain & Styling**: Tailwind CSS, CSS Modules
+- **State Management**: Zustand
+- **Komponen Ekstra**: Shadcn UI (Radix), Lucide React Icons
+- **Payment Gateway**: Midtrans (Jalur Core API / REST Fetch)
+
+---
+
+## 🚀 Panduan Instalasi (Mulai dari Nol)
+
+Ikuti langkah-langkah di bawah ini untuk menghidupkan proyek ini di komputer lokal Anda:
+
+### 1. Persiapan Awal Sistem
+Pastikan Anda sudah menginstal **Node.js** (Direkomendasikan versi 18 ke atas / LTS) di komputer Anda. Anda dapat mengeceknya dengan mengetik `node -v` dan `npm -v` di Terminal.
+
+### 2. Buka Folder Proyek
+Buka VS Code atau Terminal pilihan Anda, dan pastikan Anda sudah berada di dalam folder proyek ini:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd resto-order-app
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. Instalasi `node_modules` (NPM Install)
+Karena folder `node_modules` biasanya tidak diikutkan saat memindahkan *file*, Anda wajib mengunduh paket pendukung pihak ketiganya secara otomatis:
+```bash
+npm install
+```
+*(Tunggu beberapa saat hingga proses pengunduhan framework Tailwind, Next.js, Zustand, dll selesai 100%).*
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Konfigurasi Kunci Pembayaran (Environment Midtrans)
+Agar fitur *Checkout* & QRIS bisa menyala:
+1. Cari berkas bernama `.env.example` di dalam folder utama proyek.
+2. Silakan *Copy & Paste* atau Ubah Nama *(Rename)* file tersebut menjadi **`.env.local`**.
+3. Buka file `.env.local`, lalu isi dengan *Server Key* milik Anda yang didapatkan dari Dasbor Midtrans:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```env
+# Dapat dari Dashboard Midtrans -> Settings -> Access Keys
+MIDTRANS_SERVER_KEY=SB-Mid-server-KODE_ANDA_DISINI
+MIDTRANS_CLIENT_KEY=SB-Mid-client-KODE_ANDA_DISINI
 
-## Learn More
+# Ganti menjadi true jika sudah menggunakan API Key live/asli
+MIDTRANS_IS_PRODUCTION=false
 
-To learn more about Next.js, take a look at the following resources:
+# Sesuaikan dengan domain website Anda nanti
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 5. Jalankan Server Pengembangan (Dev Server)
+Apabila paket NPM sudah terinstal dan file rahasia `.env.local` sudah dibuat beserta isinya, ketik perintah pamungkas ini:
+```bash
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 6. Uji Coba Transaksi
+Tunggu sekitar 1 detik, lalu buka *browser* Anda dan ketikkan alamat berikut di kolom URL Pencarian:
+👉 **[http://localhost:3000](http://localhost:3000)**
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Selamat, Restoran Digital Anda dan fitur QRIS Native Canggihnya siap digunakan dan dioprek lebih lanjut! 🎉
