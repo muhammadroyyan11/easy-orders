@@ -103,10 +103,16 @@ function SuccessContent() {
             </p>
           </div>
 
-          {/* Custom QR / VA Payment Native View Gateway */}
-          {(qrUrl || vaNumber) && (
+          {/* Custom QR / VA / OVO Push Payment Native View Gateway */}
+          {(qrUrl || vaNumber || searchParams.get('push') === 'ovo') && (
             <div className="px-6 pb-2 pt-6 flex flex-col items-center border-b border-gray-50 bg-white">
-              {qrUrl ? (
+              {searchParams.get('push') === 'ovo' ? (
+                <div className="w-full bg-purple-50/40 border border-purple-100 rounded-xl p-5 text-center mb-3 shadow-sm">
+                  <p className="text-[30px] mb-2 leading-none">📲</p>
+                  <p className="text-[13px] font-extrabold text-purple-700 mb-2 uppercase">Cek Aplikasi OVO Anda!</p>
+                  <p className="text-[11px] text-purple-600/90 font-medium px-2 leading-relaxed">Kami telah mengirimkan instruksi tagihan ke Aplikasi OVO di HP Anda. Segera selesaikan pembayaran dalam 30 detik untuk memproses menu.</p>
+                </div>
+              ) : qrUrl ? (
                 <>
                   <p className="text-[14px] font-extrabold text-gray-800 mb-3 uppercase tracking-wide">Scan {paymentLabels[paymentMethod] || 'QR Code'} Berikut</p>
                   <div className="w-48 h-48 bg-white border-4 border-primary rounded-2xl overflow-hidden shadow-sm p-1.5 mb-3 select-none pointer-events-none">
@@ -187,9 +193,18 @@ function SuccessContent() {
   );
 }
 
+const SuccessSkeleton = () => (
+  <div className="flex flex-col min-h-screen bg-[#fafafa] relative sm:border-x w-full mx-auto sm:max-w-md md:max-w-lg lg:max-w-xl shadow-sm pb-12 overflow-hidden items-center justify-center px-5 py-12">
+    <div className="w-[100px] h-[100px] bg-gray-200 rounded-full animate-pulse mb-6" />
+    <div className="h-8 w-48 bg-gray-200 rounded-md animate-pulse mb-3" />
+    <div className="h-4 w-3/4 bg-gray-200 rounded-md animate-pulse mb-10" />
+    <div className="bg-white w-full h-[400px] rounded-3xl animate-pulse border border-gray-100 shadow-sm" />
+  </div>
+);
+
 export default function SuccessPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center p-6 text-gray-400 text-sm font-bold">Memverifikasi pesanan Anda...</div>}>
+    <Suspense fallback={<SuccessSkeleton />}>
       <SuccessContent />
     </Suspense>
   );

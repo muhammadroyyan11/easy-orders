@@ -17,6 +17,7 @@ export default function CartCheckoutPage() {
   const [name, setName] = useState("");
   const [table, setTable] = useState("");
   const [payment, setPayment] = useState("kasir");
+  const [ovoPhone, setOvoPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const formatPrice = (price: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price);
@@ -32,6 +33,11 @@ export default function CartCheckoutPage() {
     }
     if (!table) {
       alert("Nomor meja/area wajib diisi.");
+      return;
+    }
+
+    if (payment === 'midtrans_ovo' && (!ovoPhone || ovoPhone.length < 9)) {
+      alert("Mohon masukkan Nomor HP OVO yang valid terlebih dahulu.");
       return;
     }
 
@@ -53,6 +59,7 @@ export default function CartCheckoutPage() {
           name,
           table,
           paymentMethod: payment,
+          ovoPhone: payment === 'midtrans_ovo' ? ovoPhone : undefined,
           items: cart.items,
           totalAmount: grandTotal
         })
@@ -60,10 +67,18 @@ export default function CartCheckoutPage() {
 
       const data = await response.json();
       if (data.success) {
-        // Bawa pelanggan ke Success Page internal kita lengkap dengan Data QR atau VA
+        
+        // INTERCEPT DEEPLINK (GoPay / DANA) ke Aplikasi Mereka Langsung
+        if (data.deepLinkUrl) {
+          window.location.href = data.deepLinkUrl;
+          return; // Stop disini karena pindah aplikasi
+        }
+
+        // Bawa pelanggan ke Success Page internal kita lengkap dengan Data QR, OVO Push, atau VA
         let successUrl = `/success?order_id=${data.orderId}&method=${payment}&table=${encodeURIComponent(table)}&name=${encodeURIComponent(name)}`;
         if (data.qrUrl) successUrl += `&qr=${encodeURIComponent(data.qrUrl)}`;
         if (data.vaNumber) successUrl += `&va=${data.vaNumber}&bank=${data.bankName}`;
+        if (data.isPush) successUrl += `&push=ovo`; // Tanda bahwa Midtrans sudah mengirim ke aplikasi OVO
         router.push(successUrl);
       } else {
         alert("Gagal memproses pembayaran: " + (data.error || "Cek konfigurasi Server Key Midtrans Anda."));
@@ -193,22 +208,38 @@ export default function CartCheckoutPage() {
           <RadioGroup value={payment} onValueChange={setPayment} disabled={isSubmitting} className="space-y-3">
             {[
               { id: 'kasir', name: 'Bayar Langsung ke Kasir', desc: 'Bayar tunai/debit di meja kasir setelah selesai makan' },
-              { id: 'midtrans_gopay', name: 'GoPay', desc: 'Potong langsung dari koin GoPay Anda' },
-              { id: 'midtrans_dana', name: 'DANA', desc: 'Selesaikan transaksi dengan DANA Dompet' },
-              { id: 'midtrans_ovo', name: 'OVO', desc: 'Bayar mudah menggunakan aplikasi OVO' },
+              { id: 'midtrans_gopay', name: 'GoPay', desc: 'Akan langsung memanggil Aplikasi Gojek/GoPay' },
+              { id: 'midtrans_dana', name: 'DANA', desc: 'Akan langsung dialihkan ke checkout web/app DANA' },
+              { id: 'midtrans_ovo', name: 'OVO', desc: 'Kirim notifikasi otomatis ke HP Anda' },
               { id: 'midtrans_qris', name: 'QRIS Lainya', desc: 'Scan barcode via Aplikasi M-Banking / LinkAja' },
               { id: 'midtrans_va', name: 'Transfer Bank (VA)', desc: 'BCA, Mandiri, BNI, BRI, Permata, dll via Midtrans.' }
             ].map(method => (
               <div 
                 key={method.id} 
                 onClick={() => !isSubmitting && setPayment(method.id)}
-                className={`relative flex items-start p-4 rounded-xl border ${payment === method.id ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-gray-100 bg-white hover:bg-gray-50/50'} transition-all shadow-sm cursor-pointer select-none`}
+                className={`relative flex flex-col p-4 rounded-xl border ${payment === method.id ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-gray-100 bg-white hover:bg-gray-50/50'} transition-all shadow-sm cursor-pointer select-none`}
               >
-                <RadioGroupItem value={method.id} id={method.id} className="mt-1 mr-3.5 text-primary border-gray-300 shrink-0" />
-                <div className="flex-1">
-                  <span className={`block font-bold text-[14px] mb-1 leading-snug ${payment === method.id ? 'text-primary' : 'text-gray-900'}`}>{method.name}</span>
-                  <span className={`block text-[12px] font-medium ${payment === method.id ? 'text-primary/70' : 'text-gray-500'}`}>{method.desc}</span>
+                <div className="flex items-start w-full pointer-events-none">
+                  <RadioGroupItem value={method.id} id={method.id} className="mt-0.5 mr-3.5 text-primary border-gray-300 shrink-0" />
+                  <div className="flex-1">
+                    <span className={`block font-bold text-[14px] mb-1 leading-snug ${payment === method.id ? 'text-primary' : 'text-gray-900'}`}>{method.name}</span>
+                    <span className={`block text-[12px] font-medium ${payment === method.id ? 'text-primary/70' : 'text-gray-500'}`}>{method.desc}</span>
+                  </div>
                 </div>
+
+                {/* Input Ekstra Khusus OVO jika dipilih */}
+                {method.id === 'midtrans_ovo' && payment === 'midtrans_ovo' && (
+                  <div className="mt-4 pl-8 pr-1 cursor-auto" onClick={(e) => e.stopPropagation()}>
+                    <p className="text-[12px] font-bold text-gray-700 mb-2">Nomor HP OVO <span className="text-red-500">*</span></p>
+                    <Input 
+                      placeholder="Contoh: 08123456789" 
+                      value={ovoPhone} 
+                      onChange={e => setOvoPhone(e.target.value)} 
+                      disabled={isSubmitting}
+                      className="h-10 rounded-lg text-[13px] bg-white border-gray-200 focus-visible:ring-primary shadow-sm" 
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </RadioGroup>

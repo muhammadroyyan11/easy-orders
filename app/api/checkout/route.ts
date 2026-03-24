@@ -3,37 +3,40 @@ import { NextResponse } from 'next/server';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, table, totalAmount, paymentMethod } = body;
+    const { name, table, totalAmount, paymentMethod, ovoPhone } = body;
 
     const serverKey = process.env.MIDTRANS_SERVER_KEY || '';
     if (!serverKey) return NextResponse.json({ error: "Server belum dikonfigurasi dengan MIDTRANS_SERVER_KEY" }, { status: 500 });
 
     const orderId = `ORD-${Date.now()}`;
     const isProduction = process.env.MIDTRANS_IS_PRODUCTION === 'true';
-    // Midtrans Core API endpoint
     const coreApiUrl = isProduction 
       ? "https://api.midtrans.com/v2/charge"
       : "https://api.sandbox.midtrans.com/v2/charge";
 
     const authBase64 = Buffer.from(serverKey + ':').toString('base64');
 
-    // Native Core Payload (White label API)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let payload: any = {
-      payment_type: "qris", // Default QRIS fallback
+      payment_type: "qris", // Default Fallback
       transaction_details: {
         order_id: orderId,
         gross_amount: Math.round(totalAmount),
       },
-      customer_details: {
-        first_name: name.substring(0, 50),
-      }
+      customer_details: { first_name: name.substring(0, 50) }
     };
 
     if (paymentMethod === 'midtrans_va') {
       payload.payment_type = 'bank_transfer';
-      payload.bank_transfer = { bank: 'bca' }; // Simulasi default BCA
-    } else if (paymentMethod === 'midtrans_ewallet' || paymentMethod === 'midtrans_gopay' || paymentMethod === 'midtrans_ovo' || paymentMethod === 'midtrans_dana' || paymentMethod === 'midtrans_qris') {
+      payload.bank_transfer = { bank: 'bca' };
+    } else if (paymentMethod === 'midtrans_gopay') {
+      payload.payment_type = 'gopay';
+    } else if (paymentMethod === 'midtrans_dana') {
+      payload.payment_type = 'dana';
+    } else if (paymentMethod === 'midtrans_ovo') {
+      payload.payment_type = 'ovo';
+      payload.ovo = { phone: ovoPhone || "08123456789" }; // Push to Pay number
+    } else if (paymentMethod === 'midtrans_qris') {
       payload.payment_type = 'qris';
     }
 
@@ -55,20 +58,38 @@ export async function POST(req: Request) {
     let qrUrl = null;
     let vaNumber = null;
     let bankName = null;
+    let deepLinkUrl = null;
 
     if (data.actions) {
-      const qrAction = data.actions.find((a: any) => a.name === 'generate-qr-code');
-      if (qrAction) qrUrl = qrAction.url;
+      if (payload.payment_type === 'gopay') {
+         const dl = data.actions.find((a: any) => a.name === 'deeplink-redirect');
+         if (dl) deepLinkUrl = dl.url;
+         
+         const qr = data.actions.find((a: any) => a.name === 'generate-qr-code');
+         if (qr) qrUrl = qr.url;
+      } else if (payload.payment_type === 'dana') {
+         const dp = data.actions.find((a: any) => a.name === 'deposit' || a.name === 'redirect');
+         deepLinkUrl = dp ? dp.url : data.actions[0]?.url;
+      } else if (payload.payment_type === 'qris') {
+         const qrAction = data.actions.find((a: any) => a.name === 'generate-qr-code');
+         if (qrAction) qrUrl = qrAction.url;
+      }
     }
+    
+    // API DANA Midtrans sering mengembalikan url redirect pure
+    if (payload.payment_type === 'dana' && data.redirect_url) {
+      deepLinkUrl = data.redirect_url;
+    }
+
     if (data.va_numbers && data.va_numbers.length > 0) {
       vaNumber = data.va_numbers[0].va_number;
       bankName = data.va_numbers[0].bank;
     }
 
-    return NextResponse.json({ success: true, orderId, qrUrl, vaNumber, bankName });
+    return NextResponse.json({ success: true, orderId, qrUrl, vaNumber, bankName, deepLinkUrl, isPush: payload.payment_type === 'ovo' });
 
   } catch (error: any) {
-    console.error("Midtrans Core API Failed Fetch:", error);
-    return NextResponse.json({ error: error.message || "Failed to process Core API transaction" }, { status: 500 });
+    console.error("Midtrans Transaction Failed:", error);
+    return NextResponse.json({ error: error.message || "Failed to process Core API" }, { status: 500 });
   }
 }

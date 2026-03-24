@@ -25,8 +25,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body className="antialiased min-h-screen bg-gray-50 flex flex-col">
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
+      <body className="antialiased min-h-screen bg-gray-50 flex flex-col" suppressHydrationWarning>
         {/* Responsive App Container */}
         <div className="flex min-h-screen flex-col bg-white w-full max-w-7xl mx-auto shadow-xl relative sm:border-x">
           
