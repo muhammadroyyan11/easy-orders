@@ -49,4 +49,4 @@ A high-performance, mobile-first Restaurant Ordering System built with **Next.js
    ```
 
 ## 🔐 Admin Authentication Architecture
-The system employs secure Edge Middleware cookies. Upon the first successful initial login attempt (`admin@resto.com` / `password123`), the Database will computationally auto-heal and inject a heavily salted `Bcrypt` hash payload into the `User` table, permanently shielding the monolith credentials.
+The system employs secure Edge Middleware cookies. Upon the first successful initial login attempt (`admin@admin.com` / `password123`), the Database will computationally auto-heal and inject a heavily salted `Bcrypt` hash payload into the `User` table, permanently shielding the monolith credentials.
