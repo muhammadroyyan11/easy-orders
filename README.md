@@ -1,70 +1,52 @@
-# 🍔 Aplikasi Self-Ordering Restoran (Desktop & Mobile)
+# 🍔 Resto Modern App (Enterprise Monolith)
 
-Aplikasi pemesanan makanan layaknya aplikasi populer khusus meja restoran, di mana pelanggan bisa langsung melihat katalog digital, memilih menu, keranjang, dan melakukan pembayaran instan secara mandiri melalui *smartphone* mereka tanpa perlu memanggil pelayan.
+A high-performance, mobile-first Restaurant Ordering System built with **Next.js 14 (App Router)**, **Prisma ORM**, and **MySQL**. Featuring a ShopeeFood-inspired Customer UI and an Enterprise-grade AdminLTE 3 Dashboard.
 
-## 🔥 Fitur Unggulan
-- **UI/UX Premium (Desain Ala ShopeeFood)**: Bersih, elegan, responsif (`Mobile-First`), dominan putih dengan aksen warna "Oranye Cerah" yang menggugah selera.
-- **Keranjang Reaktif (Zustand)**: Pilihan menu dan perhitungan harga langsung difilter tanpa ada proses memuat ulang *(loading/refresh)* halaman.
-- **Integrasi Pembayaran "White-Label" (Midtrans Core API)**:
-  - Pelanggan tidak akan dilempar ke situs web bank / Midtrans (Tanpa Pop-Up/Snap iframe).
-  - Melayani pembayaran **GoPay, DANA, OVO**, **QRIS (Otomatis)**, dan **Transfer Virtual Account**.
-  - **Tampilan Sendiri (Native UX)**: QR Code dari dompet digital langsung digambar *(rendered)* menyatu ke dalam desain resi/struk digital (E-Receipt) buatan kita sendiri.
+## ✨ Core Features
+### 📱 Customer Portal (Mobile First)
+* **ShopeeFood-style UI:** Strict mobile viewport bounds (`max-w-7xl` wrapper with `420px` constraints) running on Desktop/Mobile seamlessly.
+* **Instant Cart (Zustand):** Zero-latency state management for cart items.
+* **Midtrans Integration:** Dual gateway supporting native Qris/GoPay/OVO and manual Cashier orders with DeepLink intercepts.
 
-## 💻 Teknologi yang Digunakan
-- **Framework Utama**: [Next.js (App Router)](https://nextjs.org/)
-- **Desain & Styling**: Tailwind CSS, CSS Modules
-- **State Management**: Zustand
-- **Komponen Ekstra**: Shadcn UI (Radix), Lucide React Icons
-- **Payment Gateway**: Midtrans (Jalur Core API / REST Fetch)
+### 🏢 Admin Panel (AdminLTE 3)
+* **Real-time Live Kanban:** Split-lane architecture isolating "Kasir Tunai / Pending" from the active "Kitchen Queue".
+* **Auto-Polling Webhook Simulator:** Bypasses localhost IP restrictions by actively polling native Midtrans API statuses in the background perfectly synchronizing offline and online orders.
+* **Dynamic CRUD:** Categories & Coffee Menu active management matrices.
+* **QR Table Generator:** Instant QR Code creation mapped to precise physical restaurant tables via React-QR.
+* **Audio Alerts:** Native Web Audio API synthesis generating a pristine digital receptionist bell for incoming `NEW` orders.
+* **Executive History Exports:** Auto-computed transaction histories featuring Native True `.xlsx` (SheetJS) and Print-to-PDF/A4 reports.
 
----
+## 🚀 Tech Stack
+* **Core Framework:** Next.js 14 / React 18
+* **Relational Database:** MySQL (via Laragon / XAMPP)
+* **Data Access:** Prisma ORM
+* **Styling Engine:** Tailwind CSS + Shadcn/UI
+* **Core Utilities:** Zustand, BcryptJS, Lucide React, XLSX (SheetJS)
 
-## 🚀 Panduan Instalasi (Mulai dari Nol)
+## 🛠️ Installation & Setup
+1. **Clone & Install Dependencies**
+   ```bash
+   git clone https://github.com/muhammadroyyan11/easy-orders.git
+   cd easy-orders
+   npm install
+   ```
+2. **Environment Variables (.env)**
+   ```ini
+   DATABASE_URL="mysql://root:@127.0.0.1:3306/resto_db"
+   MIDTRANS_SERVER_KEY="SB-Mid-server-xxxx"
+   MIDTRANS_CLIENT_KEY="SB-Mid-client-xxxx"
+   MIDTRANS_IS_PRODUCTION="false"
+   ```
+3. **Database Migration & Seeding**
+   ```bash
+   npx prisma migrate dev
+   npx prisma db push
+   npx prisma generate
+   ```
+4. **Run Development Server**
+   ```bash
+   npm run dev
+   ```
 
-Ikuti langkah-langkah di bawah ini untuk menghidupkan proyek ini di komputer lokal Anda:
-
-### 1. Persiapan Awal Sistem
-Pastikan Anda sudah menginstal **Node.js** (Direkomendasikan versi 18 ke atas / LTS) di komputer Anda. Anda dapat mengeceknya dengan mengetik `node -v` dan `npm -v` di Terminal.
-
-### 2. Buka Folder Proyek
-Buka VS Code atau Terminal pilihan Anda, dan pastikan Anda sudah berada di dalam folder proyek ini:
-```bash
-cd resto-order-app
-```
-
-### 3. Instalasi `node_modules` (NPM Install)
-Karena folder `node_modules` biasanya tidak diikutkan saat memindahkan *file*, Anda wajib mengunduh paket pendukung pihak ketiganya secara otomatis:
-```bash
-npm install
-```
-*(Tunggu beberapa saat hingga proses pengunduhan framework Tailwind, Next.js, Zustand, dll selesai 100%).*
-
-### 4. Konfigurasi Kunci Pembayaran (Environment Midtrans)
-Agar fitur *Checkout* & QRIS bisa menyala:
-1. Cari berkas bernama `.env.example` di dalam folder utama proyek.
-2. Silakan *Copy & Paste* atau Ubah Nama *(Rename)* file tersebut menjadi **`.env.local`**.
-3. Buka file `.env.local`, lalu isi dengan *Server Key* milik Anda yang didapatkan dari Dasbor Midtrans:
-
-```env
-# Dapat dari Dashboard Midtrans -> Settings -> Access Keys
-MIDTRANS_SERVER_KEY=SB-Mid-server-KODE_ANDA_DISINI
-MIDTRANS_CLIENT_KEY=SB-Mid-client-KODE_ANDA_DISINI
-
-# Ganti menjadi true jika sudah menggunakan API Key live/asli
-MIDTRANS_IS_PRODUCTION=false
-
-# Sesuaikan dengan domain website Anda nanti
-NEXT_PUBLIC_BASE_URL=http://localhost:3000
-```
-
-### 5. Jalankan Server Pengembangan (Dev Server)
-Apabila paket NPM sudah terinstal dan file rahasia `.env.local` sudah dibuat beserta isinya, ketik perintah pamungkas ini:
-```bash
-npm run dev
-```
-
-### 6. Uji Coba Transaksi
-Tunggu sekitar 1 detik, lalu buka *browser* Anda dan ketikkan alamat berikut di kolom URL Pencarian:
-👉 **[http://localhost:3000](http://localhost:3000)**
-
-Selamat, Restoran Digital Anda dan fitur QRIS Native Canggihnya siap digunakan dan dioprek lebih lanjut! 🎉
+## 🔐 Admin Authentication Architecture
+The system employs secure Edge Middleware cookies. Upon the first successful initial login attempt (`admin@resto.com` / `password123`), the Database will computationally auto-heal and inject a heavily salted `Bcrypt` hash payload into the `User` table, permanently shielding the monolith credentials.

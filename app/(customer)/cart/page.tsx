@@ -44,13 +44,7 @@ export default function CartCheckoutPage() {
     setIsSubmitting(true);
     cart.setOrderDetails({ name, table, paymentMethod: payment });
 
-    // JIKA BAYAR KASIR (Offline) - Lewati Midtrans, langsung pindah ke Success Page
-    if (payment === 'kasir') {
-      setTimeout(() => router.push("/success"), 1000);
-      return;
-    }
-
-    // JIKA BAYAR ONLINE (Midtrans Gateway)
+    // Panggil API Checkout Utama (Berlaku untuk SEMUA Metode: Kasir maupun Midtrans)
     try {
       const response = await fetch('/api/checkout', {
         method: 'POST',
@@ -174,7 +168,9 @@ export default function CartCheckoutPage() {
             <div className="space-y-2.5">
               <Label htmlFor="name" className="text-gray-700 text-[13px] font-bold">Nama Pemesan <span className="text-red-500">*</span></Label>
               <Input 
-                id="name" 
+                id="customer_name_guard" 
+                name="customer_name_guard"
+                autoComplete="never"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={isSubmitting}

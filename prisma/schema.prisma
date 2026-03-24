@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("CASHIER") // Peran Admin / Kasir
+  createdAt DateTime @default(now())
+}
+
+model Category {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  items     MenuItem[]
+  createdAt DateTime   @default(now())
+}
+
+model MenuItem {
+  id          String   @id @default(uuid())
+  name        String
+  description String   @db.Text
+  price       Int
+  image       String?  @db.Text
+  popular     Boolean  @default(false)
+  category    Category @relation(fields: [categoryId], references: [id])
+  categoryId  String
+  orderItems  OrderItem[]
+  createdAt   DateTime @default(now())
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  orderNumber   String      @unique // ID Unik Trx Midtrans
+  customerName  String
+  tableNumber   String
+  totalAmount   Int
+  paymentMethod String
+  paymentStatus String      @default("PENDING") // PENDING, PAID, FAILED
+  orderStatus   String      @default("NEW")     // NEW, PREPARING, DELIVERED
+  qrUrl         String?     @db.Text
+  deepLinkUrl   String?     @db.Text
+  vaNumber      String?
+  bankName      String?
+  isPush        Boolean     @default(false)
+  
+  items         OrderItem[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model OrderItem {
+  id         String   @id @default(uuid())
+  order      Order    @relation(fields: [orderId], references: [id])
+  orderId    String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  menuItemId String
+  quantity   Int
+  price      Int      // Harga terkunci saat order dibayarkan
+}
