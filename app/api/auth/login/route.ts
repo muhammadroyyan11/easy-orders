@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import * as jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-me';
 
 export async function POST(req: Request) {
   try {
@@ -48,6 +51,21 @@ export async function POST(req: Request) {
     // Terbitkan JWT / Http-Only Session Token ke peramban Kasir
     // Next.js 15+ Mewajibkan deklarasi Await pada manipulasi Cookie
     const cookieStore = await cookies();
+    
+    const token = jwt.sign(
+      { id: user.id, name: user.name, role: user.role }, 
+      JWT_SECRET, 
+      { expiresIn: '24h' }
+    );
+
+    cookieStore.set('pos_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/'
+    });
+
+    // Pertahankan legacy session untuk proxy.ts
     cookieStore.set('admin_session', 'authenticated', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

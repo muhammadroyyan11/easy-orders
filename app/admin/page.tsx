@@ -79,7 +79,7 @@ export default function AdminDashboard() {
 
   const pendingOrders = orders.filter(o => o.paymentStatus === 'PENDING');
   const kitchenOrders = orders.filter(o => o.paymentStatus === 'PAID' && o.orderStatus !== 'DELIVERED');
-  const completedOrders = orders.filter(o => o.orderStatus === 'DELIVERED').slice(0, 15);
+  const completedOrders = orders.filter(o => o.orderStatus === 'DELIVERED').slice(0, 20);
 
   return (
     <div className="w-full p-4 sm:p-6">

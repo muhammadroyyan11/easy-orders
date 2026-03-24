@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getCurrentBranchId } from '@/lib/branch';
 
 async function autoSyncMidtrans(orders: any[]) {
   const pendingMidtrans = orders.filter(o => o.paymentStatus === 'PENDING' && o.paymentMethod.startsWith('midtrans_'));
@@ -45,7 +46,9 @@ async function autoSyncMidtrans(orders: any[]) {
 
 export async function GET() {
   try {
+    const branchId = await getCurrentBranchId();
     let orders = await prisma.order.findMany({
+      where: { branchId },
       include: { items: { include: { menuItem: true } } },
       orderBy: { createdAt: 'desc' }
     });
@@ -61,9 +64,25 @@ export async function GET() {
 
 export async function PATCH(req: Request) {
   try {
-    const body = await req.json();
-    const { id, paymentStatus, orderStatus } = body;
+    const { id, paymentStatus, orderStatus } = await req.json();
     if (!id) return NextResponse.json({ error: "Missing Order ID" }, { status: 400 });
+
+    // DEDUCT INVENTORY ON FIRST PAID TRANSITION
+    if (paymentStatus === 'PAID') {
+       const existingOrder = await prisma.order.findUnique({ where: { id }, include: { items: true } });
+       if (existingOrder && existingOrder.paymentStatus !== 'PAID') {
+           // It's turning PAID for the first time! Deduct Raw Materials based on Recipes
+           for (const orderItem of existingOrder.items) {
+               const recipes = await prisma.recipe.findMany({ where: { menuItemId: orderItem.menuItemId } });
+               for (const r of recipes) {
+                  await prisma.rawMaterial.update({
+                     where: { id: r.rawMaterialId },
+                     data: { stock: { decrement: r.quantityUsed * orderItem.quantity } }
+                  });
+               }
+           }
+       }
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data: any = {};

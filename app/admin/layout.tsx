@@ -2,15 +2,33 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Coffee, List, QrCode, LogOut, Menu, Bell, Search, History, FileSpreadsheet, FileText } from 'lucide-react';
-import { useState } from 'react';
+import { LayoutDashboard, Coffee, List, QrCode, LogOut, Menu, Bell, Search, History, FileSpreadsheet, FileText, ChefHat, TrendingUp, Users, Store } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [currentBranchId, setCurrentBranchId] = useState<string>('');
+
+  useEffect(() => {
+    setMounted(true);
+    fetch('/api/branches').then(r => r.json()).then(data => {
+       if (data.branches) {
+           setBranches(data.branches);
+           setCurrentBranchId(data.currentBranchId);
+       }
+    });
+  }, []);
 
   const pathname = usePathname();
   if (pathname === '/admin/login') return <>{children}</>;
+
+  const handleBranchSwitch = async (id: string) => {
+    await fetch('/api/auth/branch', { method: 'POST', body: JSON.stringify({ branchId: id }) });
+    window.location.reload();
+  };
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -30,8 +48,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Brand Logo Menu */}
         <div className="h-[57px] flex items-center px-4 border-b border-[#4b545c] shrink-0">
           <span className="font-light text-xl text-white flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#343a40] font-black text-lg shadow-sm">R</div>
-            <span>Admin<b className="font-bold">LTE</b></span>
+            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#343a40] font-black text-lg shadow-sm">E</div>
+            <span>Easy <b className="font-bold">Orders</b></span>
           </span>
         </div>
         
@@ -45,10 +63,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
           <nav className="px-2 space-y-1 mt-3">
              <NavLink href="/admin" icon={<LayoutDashboard size={18} />} label="Dashboard Kasir" />
+             <NavLink href="/admin/kitchen" icon={<ChefHat size={18} />} label="Dapur KDS (Chef)" />
+             <NavLink href="/admin/analytics" icon={<TrendingUp size={18} />} label="Statistik Omzet" />
              <NavLink href="/admin/history" icon={<History size={18} />} label="Riwayat Transaksi" />
              <NavLink href="/admin/menus" icon={<Coffee size={18} />} label="Katalog Menu" />
              <NavLink href="/admin/categories" icon={<List size={18} />} label="Data Kategori" />
              <NavLink href="/admin/tables" icon={<QrCode size={18} />} label="Manajemen Meja" />
+             <div className="pt-2 pb-1">
+                 <p className="px-3 text-[11px] font-bold text-[#818896] uppercase tracking-wider">Perusahaan SaaS</p>
+             </div>
+             <NavLink href="/admin/shift" icon={<List size={18} />} label="Shift & Rekap Laci" />
+             <NavLink href="/admin/branches" icon={<Store size={18} />} label="Manajemen Outlet" />
+             <NavLink href="/admin/users" icon={<Users size={18} />} label="Data Pegawai" />
           </nav>
         </div>
         
@@ -65,16 +91,39 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* AdminLTE Light Navbar */}
         <header className="print:hidden h-[57px] flex items-center justify-between px-4 bg-white border-b border-[#dee2e6] shrink-0 z-10 w-full">
           <div className="flex items-center gap-4">
-            <button 
-              className="p-1.5 text-gray-500 hover:text-gray-700 transition-colors"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              <Menu size={22} className="hidden lg:block"/>
-              <Menu size={22} className="lg:hidden"/>
-            </button>
-            <div className="hidden sm:flex items-center gap-4 font-medium text-sm text-gray-500">
-               <span className="hover:text-gray-700 cursor-pointer transition-colors">Home</span>
-               <span className="hover:text-gray-700 cursor-pointer transition-colors">Contact</span>
+            {/* Topbar */}
+            <div className="h-[57px] px-4 bg-white border-b border-[#dee2e6] flex items-center justify-between shadow-sm sticky top-0 z-20 w-full">
+               <button 
+                 onClick={() => setIsMobileMenuOpen(true)} 
+                 className="lg:hidden p-1.5 text-gray-500 hover:text-gray-700 transition-colors"
+               >
+                 <Menu size={22} />
+               </button>
+               
+               <div className="flex-1 flex justify-between items-center px-2 lg:px-6">
+                 
+                 {/* BRANCH SELECTOR */}
+                 <div className="flex items-center gap-3">
+                    <span className="text-[12px] font-bold text-[#6c757d] uppercase tracking-wider hidden sm:inline-block">Outlet Aktif:</span>
+                    <select 
+                       value={currentBranchId}
+                       onChange={(e) => handleBranchSwitch(e.target.value)}
+                       className="bg-[#f8f9fa] border border-[#ced4da] text-[#212529] text-[14px] font-bold py-1.5 px-3 rounded-[4px] hover:border-[#80bdff] focus:outline-none transition-all cursor-pointer shadow-sm w-44 truncate"
+                    >
+                      {branches.map(b => (
+                         <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </select>
+                 </div>
+
+                 <div className="flex items-center gap-3 ml-auto">
+                    <div className="relative hidden md:block">
+                      {/* Assuming 'Input' is a custom component or a simple input tag */}
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
+                      <input placeholder="Pencarian global..." className="h-[36px] w-[250px] pl-9 bg-[#f4f6f9] border-transparent focus:bg-white text-[13px] rounded-[20px] transition-all border"/>
+                    </div>
+                 </div>
+               </div>
             </div>
           </div>
           

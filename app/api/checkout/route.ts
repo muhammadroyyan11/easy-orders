@@ -1,12 +1,50 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getCurrentBranchId } from '@/lib/branch';
 
 export async function POST(req: Request) {
   try {
+    const branchId = await getCurrentBranchId();
+
+    // SHIFT ENFORCEMENT: Tirai Baja Penjualan
+    const activeShift = await prisma.cashShift.findFirst({
+      where: { branchId, status: 'OPEN' }
+    });
+    
+    if (!activeShift) {
+       return NextResponse.json({ error: "Mesin Kasir Terkunci! Belum ada Shift Kasir yang dibuka (Toko Tutup)." }, { status: 403 });
+    }
+
     const body = await req.json();
-    const { name, table, totalAmount, paymentMethod, ovoPhone, items } = body;
+    const { name, table, totalAmount, paymentMethod, ovoPhone, items, customerPhone, useLoyalty } = body;
 
     const orderId = `ORD-${Date.now()}`;
+    
+    // Eksekusi Loyalty Member
+    let finalAmount = Math.round(totalAmount);
+    if (customerPhone && customerPhone.length >= 9) {
+      const member = await prisma.member.upsert({
+        where: { phone: customerPhone },
+        update: {},
+        create: { phone: customerPhone, points: 0 }
+      });
+
+      if (useLoyalty && member.points >= 20) {
+        finalAmount = Math.round(finalAmount * 0.9);
+        await prisma.member.update({
+          where: { id: member.id },
+          data: { points: { decrement: 20 } }
+        });
+      }
+
+      const earnedPoints = Math.floor(finalAmount / 10000);
+      if (earnedPoints > 0) {
+        await prisma.member.update({
+          where: { id: member.id },
+          data: { points: { increment: earnedPoints } }
+        });
+      }
+    }
     
     // OFFLINE PAYMENT (Kasir Murni)
     if (paymentMethod === 'kasir') {
@@ -15,9 +53,10 @@ export async function POST(req: Request) {
           orderNumber: orderId,
           customerName: name,
           tableNumber: table,
-          totalAmount: Math.round(totalAmount),
+          totalAmount: finalAmount,
           paymentMethod: 'kasir',
           paymentStatus: 'PENDING',
+          branchId,
           items: {
             create: items.map((item: any) => ({
               menuItemId: item.id,
@@ -46,7 +85,7 @@ export async function POST(req: Request) {
       payment_type: "qris", // Default
       transaction_details: {
         order_id: orderId,
-        gross_amount: Math.round(totalAmount),
+        gross_amount: finalAmount,
       },
       customer_details: { first_name: name.substring(0, 50) }
     };
@@ -116,7 +155,7 @@ export async function POST(req: Request) {
         orderNumber: orderId,
         customerName: name,
         tableNumber: table,
-        totalAmount: Math.round(totalAmount),
+        totalAmount: finalAmount,
         paymentMethod: paymentMethod,
         paymentStatus: 'PENDING',
         qrUrl: qrUrl,
@@ -124,6 +163,7 @@ export async function POST(req: Request) {
         vaNumber: vaNumber,
         bankName: bankName,
         isPush: payload.payment_type === 'ovo',
+        branchId,
         items: {
           create: items.map((item: any) => ({
             menuItemId: item.id,

@@ -12,6 +12,15 @@ export default function HistoryPage() {
   // Filters
   const [paymentFilter, setPaymentFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(15);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [paymentFilter, statusFilter, searchTerm, itemsPerPage]);
 
   const fetchHistory = async () => {
     try {
@@ -33,10 +42,20 @@ export default function HistoryPage() {
   const filteredOrders = orders.filter(o => {
     if (paymentFilter !== 'ALL' && o.paymentStatus !== paymentFilter) return false;
     if (statusFilter !== 'ALL' && o.orderStatus !== statusFilter) return false;
+    if (searchTerm) {
+       const searchLower = searchTerm.toLowerCase();
+       const matchesOrderNumber = (o.orderNumber || o.id).toLowerCase().includes(searchLower);
+       const matchesCustomer = o.customerName.toLowerCase().includes(searchLower);
+       if (!matchesOrderNumber && !matchesCustomer) return false;
+    }
     return true;
   });
 
   const grandTotal = filteredOrders.reduce((acc, curr) => acc + curr.totalAmount, 0);
+
+  // Hitung Data Halaman
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
+  const paginatedOrders = filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const exportToExcel = () => {
     const worksheetData = filteredOrders.map(o => ({
@@ -125,10 +144,30 @@ export default function HistoryPage() {
 
       {/* Data Table */}
       <div className="bg-white rounded-[4px] shadow-sm border border-[#dee2e6] overflow-hidden print:border-none print:shadow-none">
+        
+        {/* DataTable Top Controls */}
+        <div className="p-4 flex flex-col sm:flex-row justify-between items-center gap-4 border-b border-[#dee2e6] print:hidden">
+           <div className="flex items-center gap-2 text-[14px] text-[#495057]">
+              <span>Tampilkan</span>
+              <select value={itemsPerPage} onChange={e => setItemsPerPage(Number(e.target.value))} className="border border-[#ced4da] rounded-[3px] px-2 py-1 outline-none focus:border-[#80bdff]">
+                 <option value={15}>15</option>
+                 <option value={30}>30</option>
+                 <option value={50}>50</option>
+                 <option value={100}>100</option>
+              </select>
+              <span>entri</span>
+           </div>
+           <div className="flex items-center gap-2 text-[14px] text-[#495057]">
+              <span>Cari:</span>
+              <input type="search" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="border border-[#ced4da] rounded-[3px] px-3 py-1 outline-none focus:border-[#80bdff]" placeholder="ID / Pelanggan..." />
+           </div>
+        </div>
+
          <div className="overflow-x-auto">
            <table className="w-full text-sm text-left">
              <thead className="bg-[#f8f9fa] text-[#495057] font-bold border-b border-[#dee2e6] print:bg-gray-100">
                <tr>
+                 <th className="px-4 py-3 w-[40px] text-center font-bold">#</th>
                  <th className="px-4 py-3">ID / Waktu</th>
                  <th className="px-4 py-3">Pelanggan</th>
                  <th className="px-4 py-3">Metode</th>
@@ -140,19 +179,22 @@ export default function HistoryPage() {
              <tbody className="divide-y divide-[#dee2e6] text-[#212529]">
                {isLoading ? (
                  <tr>
-                   <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                   <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                       Memuat data riwayat...
                    </td>
                  </tr>
-               ) : filteredOrders.length === 0 ? (
-                 <tr>
-                   <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
-                      Tidak ada riwayat transaksi yang cocok dengan filter.
-                   </td>
-                 </tr>
-               ) : (
-                 filteredOrders.map(order => (
-                   <tr key={order.id} className="hover:bg-[#f8f9fa] print:break-inside-avoid">
+                ) : paginatedOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                       Tidak ada riwayat transaksi yang cocok dengan filter.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedOrders.map((order, index) => (
+                    <tr key={order.id} className="hover:bg-[#f8f9fa] print:break-inside-avoid">
+                     <td className="px-4 py-3 text-center font-medium text-gray-500">
+                        {(currentPage - 1) * itemsPerPage + index + 1}
+                     </td>
                      <td className="px-4 py-3">
                        <span className="block font-bold text-[#007bff] print:text-black">
                          #{order.orderNumber?.slice(-8) || order.id.slice(0,8)}
@@ -189,7 +231,33 @@ export default function HistoryPage() {
              </tbody>
            </table>
          </div>
-      </div>
+
+          {/* Pagination Controls */}
+          {!isLoading && totalPages > 0 && (
+             <div className="px-5 py-3 border-t border-[#dee2e6] bg-[#f8f9fa] flex flex-col sm:flex-row items-center justify-between gap-3 print:hidden">
+                <span className="text-[14px] text-[#212529]">
+                   Menampilkan {!isLoading && filteredOrders.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} sampai {!isLoading ? Math.min(currentPage * itemsPerPage, filteredOrders.length) : 0} dari {!isLoading ? filteredOrders.length : 0} entri {searchTerm && `(difilter)`}
+                </span>
+                <div className="flex gap-1">
+                  <button 
+                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
+                   disabled={currentPage === 1}
+                   className="px-3 py-1.5 text-xs font-bold rounded-[3px] border border-[#ced4da] bg-white text-[#495057] hover:bg-[#e9ecef] disabled:opacity-50 transition-colors"
+                 >
+                   Sbelumnya
+                 </button>
+                 <button 
+                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
+                   disabled={currentPage === totalPages}
+                   className="px-3 py-1.5 text-xs font-bold rounded-[3px] border border-[#ced4da] bg-white text-[#495057] hover:bg-[#e9ecef] disabled:opacity-50 transition-colors"
+                 >
+                   Selanjutnya
+                 </button>
+               </div>
+             </div>
+          )}
+
+       </div>
       
     </div>
   );

@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getCurrentBranchId } from '@/lib/branch';
 
 export async function GET() {
   try {
+    const branchId = await getCurrentBranchId();
     const menus = await prisma.menuItem.findMany({
+      where: { branchId },
       include: { category: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -15,6 +18,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const branchId = await getCurrentBranchId();
     const body = await req.json();
     const newMenu = await prisma.menuItem.create({
       data: {
@@ -24,6 +28,7 @@ export async function POST(req: Request) {
         image: body.image,
         popular: body.popular || false,
         categoryId: body.categoryId,
+        branchId,
       }
     });
     return NextResponse.json(newMenu, { status: 201 });

@@ -7,20 +7,48 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Branch {
+  id          String         @id @default(uuid())
+  name        String
+  address     String?
+  phone       String?
+  
+  users       User[]
+  categories  Category[]
+  items       MenuItem[]
+  materials   RawMaterial[]
+  purchases   PurchaseOrder[]
+  orders      Order[]
+  expenses    OperationalExpense[]
+  cashShifts  CashShift[]
+  
+  createdAt   DateTime       @default(now())
+}
+
 model User {
   id        String   @id @default(uuid())
   name      String
   email     String   @unique
   password  String
-  role      String   @default("CASHIER") // Peran Admin / Kasir
+  role      String   @default("CASHIER") // SUPERADMIN, ADMIN, CASHIER
+  
+  branchId  String?
+  branch    Branch?  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  
   createdAt DateTime @default(now())
 }
 
 model Category {
   id        String     @id @default(uuid())
-  name      String     @unique
+  name      String
+  
+  branchId  String
+  branch    Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  
   items     MenuItem[]
   createdAt DateTime   @default(now())
+  
+  @@unique([name, branchId])
 }
 
 model MenuItem {
@@ -30,20 +58,26 @@ model MenuItem {
   price       Int
   image       String?  @db.Text
   popular     Boolean  @default(false)
-  category    Category @relation(fields: [categoryId], references: [id])
+  
   categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  
+  branchId    String
+  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
   orderItems  OrderItem[]
+  recipes     Recipe[]
   createdAt   DateTime @default(now())
 }
 
 model Order {
   id            String      @id @default(uuid())
-  orderNumber   String      @unique // ID Unik Trx Midtrans
+  orderNumber   String      @unique
   customerName  String
   tableNumber   String
   totalAmount   Int
   paymentMethod String
-  paymentStatus String      @default("PENDING") // PENDING, PAID, FAILED
+  paymentStatus String      @default("PENDING")  // PENDING, PAID, FAILED
   orderStatus   String      @default("NEW")     // NEW, PREPARING, DELIVERED
   qrUrl         String?     @db.Text
   deepLinkUrl   String?     @db.Text
@@ -51,6 +85,9 @@ model Order {
   bankName      String?
   isPush        Boolean     @default(false)
   
+  branchId      String
+  branch        Branch      @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
   items         OrderItem[]
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -58,10 +95,105 @@ model Order {
 
 model OrderItem {
   id         String   @id @default(uuid())
-  order      Order    @relation(fields: [orderId], references: [id])
   orderId    String
-  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
   quantity   Int
-  price      Int      // Harga terkunci saat order dibayarkan
+  price      Int      
+}
+
+model Member {
+  id        String   @id @default(uuid())
+  phone     String   @unique
+  points    Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RawMaterial {
+  id          String         @id @default(uuid())
+  name        String
+  sku         String?
+  stock       Float          @default(0)
+  unit        String         
+  costPerUnit Float          @default(0) 
+  
+  branchId    String
+  branch      Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  recipes     Recipe[]
+  purchases   PurchaseItem[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  @@unique([sku, branchId])
+}
+
+model Recipe {
+  id            String      @id @default(uuid())
+  menuItemId    String
+  menuItem      MenuItem    @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  rawMaterialId String
+  rawMaterial   RawMaterial @relation(fields: [rawMaterialId], references: [id], onDelete: Restrict)
+  quantityUsed  Float       
+  createdAt     DateTime    @default(now())
+  
+  @@unique([menuItemId, rawMaterialId])
+}
+
+model PurchaseOrder {
+  id           String         @id @default(uuid())
+  supplierName String?
+  invoiceId    String?
+  totalCost    Float          @default(0)
+  
+  branchId     String
+  branch       Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  items        PurchaseItem[]
+  createdAt    DateTime       @default(now())
+}
+
+model PurchaseItem {
+  id                String        @id @default(uuid())
+  purchaseOrderId   String
+  purchaseOrder     PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  rawMaterialId     String
+  rawMaterial       RawMaterial   @relation(fields: [rawMaterialId], references: [id], onDelete: Restrict)
+  quantityPurchased Float
+  costPerUnit       Float         
+  subtotal          Float
+  createdAt         DateTime      @default(now())
+}
+
+model CashShift {
+  id            String    @id @default(uuid())
+  cashierName   String
+  startTime     DateTime  @default(now())
+  endTime       DateTime?
+  startingCash  Int       @default(0)
+  actualCash    Int?
+  expectedCash  Int?
+  status        String    @default("OPEN") 
+  
+  branchId      String
+  branch        Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model OperationalExpense {
+  id            String    @id @default(uuid())
+  title         String
+  amount        Int
+  category      String    
+  date          DateTime
+  notes         String?   @db.Text
+  
+  branchId      String
+  branch        Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime  @default(now())
 }

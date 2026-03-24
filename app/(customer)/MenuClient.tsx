@@ -25,7 +25,7 @@ export default function MenuClient({ categories, menuItems }: { categories: any[
       
       {/* Restaurant Info Header */}
       <div className="px-4 lg:px-10 pt-6 pb-6 border-b-[6px] border-gray-100">
-        <h1 className="text-[22px] lg:text-[30px] font-extrabold text-gray-900 mb-1.5 lg:mb-2 leading-tight">Resto Modern - Cabang Utama</h1>
+        <h1 className="text-[22px] lg:text-[30px] font-extrabold text-gray-900 mb-1.5 lg:mb-2 leading-tight">Easy Orders - Cabang Utama</h1>
         <p className="text-sm lg:text-base text-gray-500 mb-4 lg:mb-5">Aneka Nasi, Cepat Saji, Minuman</p>
         
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3 text-[13px] lg:text-[14px] font-medium text-gray-700">

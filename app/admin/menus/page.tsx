@@ -11,6 +11,12 @@ export default function MenuAdmin() {
   const [form, setForm] = useState({ name: '', description: '', price: '', image: '', categoryId: '', popular: false });
   const [isLoading, setIsLoading] = useState(false);
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 9;
+  const totalPages = Math.ceil(menus.length / itemsPerPage) || 1;
+  const paginatedMenus = menus.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   const fetchData = async () => {
     const [resMenu, resCat] = await Promise.all([fetch('/api/menus'), fetch('/api/categories')]);
     setMenus(await resMenu.json());
@@ -101,7 +107,7 @@ export default function MenuAdmin() {
            
            <div className="p-4 sm:p-5">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-               {menus.map(m => (
+               {paginatedMenus.map(m => (
                  <div key={m.id} className="flex flex-row sm:flex-col lg:flex-row gap-3 p-3 bg-white rounded border border-[#dee2e6] hover:border-[#b8bfc6] transition-colors relative">
                    <div className="w-[70px] h-[70px] sm:w-full sm:h-[120px] lg:w-[90px] lg:h-[90px] rounded bg-[#f4f6f9] overflow-hidden shrink-0">
                      {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -129,9 +135,30 @@ export default function MenuAdmin() {
                    <p className="text-gray-500 font-medium">Katalog menu Anda kosong.</p>
                  </div>
                )}
-              </div>
-           </div>
-        </div>
+               </div>
+               
+               {/* Pagination UI */}
+               {totalPages > 1 && (
+                  <div className="mt-6 flex items-center justify-between border-t border-[#dee2e6] pt-4">
+                     <span className="text-xs text-[#6c757d] font-medium">
+                       Menampilkan {paginatedMenus.length} dari {menus.length} Item (Hal {currentPage}/{totalPages})
+                     </span>
+                     <div className="flex gap-1">
+                       <button 
+                         onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
+                         disabled={currentPage === 1}
+                         className="px-3 py-1 text-xs font-bold rounded-[3px] border border-[#ced4da] bg-white hover:bg-gray-50 disabled:opacity-50"
+                       >Prev</button>
+                       <button 
+                         onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
+                         disabled={currentPage === totalPages}
+                         className="px-3 py-1 text-xs font-bold rounded-[3px] border border-[#ced4da] bg-white hover:bg-gray-50 disabled:opacity-50"
+                       >Next</button>
+                     </div>
+                  </div>
+               )}
+            </div>
+         </div>
       </div>
     </div>
   );

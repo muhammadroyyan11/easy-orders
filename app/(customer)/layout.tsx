@@ -13,7 +13,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
           </Link>
           
           <div className="flex-1 flex justify-center">
-             <span className="font-bold text-gray-900 text-lg tracking-tight">Resto Modern</span>
+             <span className="font-bold text-gray-900 text-lg tracking-tight">Easy Orders</span>
           </div>
 
           <div className="flex items-center gap-1">

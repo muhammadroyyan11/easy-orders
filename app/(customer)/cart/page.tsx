@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ChevronLeft, Trash2, Wallet, UserCircle, MapPinHouse, CreditCard, ReceiptText, Loader2 } from "lucide-react";
+import { ChevronLeft, Trash2, Wallet, UserCircle, MapPinHouse, CreditCard, ReceiptText, Loader2, Calculator, Users } from "lucide-react";
 
 export default function CartCheckoutPage() {
   const router = useRouter();
@@ -18,13 +18,44 @@ export default function CartCheckoutPage() {
   const [table, setTable] = useState("");
   const [payment, setPayment] = useState("kasir");
   const [ovoPhone, setOvoPhone] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [memberPoints, setMemberPoints] = useState<number | null>(null);
+  const [useLoyalty, setUseLoyalty] = useState(false);
+  const [isCheckingPoints, setIsCheckingPoints] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Split Bill State
+  const [showSplit, setShowSplit] = useState(false);
+  const [splitItems, setSplitItems] = useState<Record<string, string>>({}); // itemId -> personName
+  const [newPerson, setNewPerson] = useState('');
+  const [persons, setPersons] = useState<string[]>(['Saya', 'Teman 1']);
+
+  const handleCheckPoints = async () => {
+    if (!customerPhone || customerPhone.length < 9) {
+      alert("Masukkan Nomor WhatsApp yang valid terlebih dahulu.");
+      return;
+    }
+    setIsCheckingPoints(true);
+    try {
+      const res = await fetch(`/api/member?phone=${customerPhone}`);
+      const data = await res.json();
+      setMemberPoints(data.points || 0);
+      if (data.points < 20) {
+        setUseLoyalty(false);
+      }
+    } catch {
+      alert("Gagal menghubungi server Member.");
+    } finally {
+      setIsCheckingPoints(false);
+    }
+  };
 
   const formatPrice = (price: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price);
 
   const subtotal = cart.getTotalPrice();
   const taxAmount = subtotal * 0.1;
   const grandTotal = subtotal + taxAmount;
+  const finalGrandTotal = useLoyalty ? grandTotal * 0.9 : grandTotal;
 
   const handleCheckout = async () => {
     if (!name || name.length < 2) {
@@ -52,6 +83,8 @@ export default function CartCheckoutPage() {
         body: JSON.stringify({
           name,
           table,
+          useLoyalty,
+          customerPhone: customerPhone ? customerPhone : undefined,
           paymentMethod: payment,
           ovoPhone: payment === 'midtrans_ovo' ? ovoPhone : undefined,
           items: cart.items,
@@ -152,11 +185,95 @@ export default function CartCheckoutPage() {
               <span>Pajak Restoran (10%)</span>
               <span>{formatPrice(taxAmount)}</span>
             </div>
+            {useLoyalty && (
+               <div className="flex justify-between items-center text-[13px] font-black text-green-600 bg-green-100/50 p-2 rounded-lg mt-1">
+                 <span>Diskon Member Loyal (-10%)</span>
+                 <span>- {formatPrice(grandTotal * 0.1)}</span>
+               </div>
+            )}
             <div className="flex justify-between items-center pt-3 mt-3 border-t border-gray-200/60">
               <span className="font-bold text-gray-800 text-[15px]">Total Pembayaran</span>
-              <span className="font-extrabold text-[18px] lg:text-[22px] text-primary tracking-tight">{formatPrice(grandTotal)}</span>
+              <span className="font-extrabold text-[18px] lg:text-[22px] text-primary tracking-tight">{formatPrice(finalGrandTotal)}</span>
             </div>
           </div>
+
+          {/* Split Bill Toggle */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <button 
+              onClick={() => setShowSplit(!showSplit)}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-orange-50 text-orange-600 font-bold hover:bg-orange-100 transition-colors"
+            >
+              <Calculator size={18}/> {showSplit ? 'Tutup Kalkulator Patungan' : 'Hitung Patungan (Split-Bill)'}
+            </button>
+          </div>
+
+          {showSplit && (
+            <div className="mt-4 p-4 lg:p-5 bg-white border border-orange-200 rounded-2xl shadow-inner animate-in slide-in-from-top-4 duration-300">
+               <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><Users size={16} className="text-orange-500"/> Siapa Saja Yang Makan?</h3>
+               <div className="flex flex-wrap gap-2 mb-4">
+                 {persons.map(p => (
+                    <div key={p} className="px-3 py-1.5 bg-orange-500 text-white text-[13px] font-bold rounded-lg flex items-center gap-2">
+                       {p}
+                       {p !== 'Saya' && (
+                         <button onClick={() => setPersons(prev => prev.filter(x => x !== p))} className="hover:text-red-200">×</button>
+                       )}
+                    </div>
+                 ))}
+                 <div className="flex items-center gap-2 ml-2">
+                    <input 
+                      placeholder="Tambah Nama..."
+                      value={newPerson}
+                      onChange={e => setNewPerson(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && newPerson.trim() && !persons.includes(newPerson.trim())) {
+                           setPersons([...persons, newPerson.trim()]);
+                           setNewPerson('');
+                        }
+                      }}
+                      className="text-[13px] w-28 px-2 py-1.5 border border-gray-300 rounded-lg outline-none"
+                    />
+                 </div>
+               </div>
+
+               <h3 className="font-bold text-gray-800 mb-3 text-[14px]">Pilih Makanan Masing-Masing:</h3>
+               <div className="space-y-2 mb-5">
+                  {cart.items.map(item => (
+                    <div key={item.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-xl border border-gray-100">
+                       <div>
+                          <p className="text-[13px] font-bold text-gray-800">{item.name} <span className="text-gray-400">x{item.quantity}</span></p>
+                          <p className="text-[12px] font-medium text-gray-500">{formatPrice(item.price * item.quantity)}</p>
+                       </div>
+                       <select 
+                          className="text-[13px] border border-gray-300 rounded-lg px-2 py-1.5 bg-white font-bold text-orange-600 outline-none"
+                          value={splitItems[item.id] || 'Saya'}
+                          onChange={(e) => setSplitItems(prev => ({...prev, [item.id]: e.target.value}))}
+                       >
+                          {persons.map(p => <option key={p} value={p}>{p}</option>)}
+                       </select>
+                    </div>
+                  ))}
+               </div>
+
+               <h3 className="font-bold text-gray-800 mb-2 border-b pb-2 text-[14px]">Hasil Hitungan (Termasuk Pajak & Diskon):</h3>
+               <div className="space-y-2">
+                 {persons.map(p => {
+                    const personItems = cart.items.filter(item => (splitItems[item.id] || 'Saya') === p);
+                    const personRawTotal = personItems.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
+                    const personTax = personRawTotal * 0.1;
+                    let personFinal = personRawTotal + personTax;
+                    if (useLoyalty) personFinal = personFinal * 0.9;
+
+                    if (personFinal === 0) return null;
+                    return (
+                      <div key={p} className="flex justify-between items-center bg-green-50/50 p-2 rounded-lg">
+                         <span className="text-[13px] font-bold text-gray-700">{p}</span>
+                         <span className="text-[14px] font-black text-green-700">{formatPrice(personFinal)}</span>
+                      </div>
+                    )
+                 })}
+               </div>
+            </div>
+          )}
         </section>
 
         {/* Form Data Pelanggan */}
@@ -177,6 +294,47 @@ export default function CartCheckoutPage() {
                 placeholder="Contoh: Budi Santoso" 
                 className="rounded-xl border-gray-200 bg-white focus-visible:ring-primary h-[50px] text-[15px] shadow-sm font-medium" 
               />
+            </div>
+            <div className="space-y-2.5">
+              <Label htmlFor="customerPhone" className="text-gray-700 text-[13px] font-bold">Nomor WhatsApp (Member Diskon) <span className="text-gray-400 font-normal italic">*Opsional</span></Label>
+              <div className="flex gap-2">
+                <Input 
+                  id="customerPhone" 
+                  value={customerPhone}
+                  onChange={(e) => {
+                     setCustomerPhone(e.target.value);
+                     setMemberPoints(null);
+                     setUseLoyalty(false);
+                  }}
+                  disabled={isSubmitting}
+                  placeholder="0812..." 
+                  className="rounded-xl border-gray-200 bg-white focus-visible:ring-primary h-[50px] text-[15px] shadow-sm font-medium flex-1" 
+                />
+                <Button 
+                   type="button" 
+                   onClick={handleCheckPoints} 
+                   disabled={isSubmitting || isCheckingPoints || !customerPhone}
+                   className="h-[50px] rounded-xl px-4 bg-gray-900 hover:bg-gray-800 text-white shadow-sm flex items-center justify-center shrink-0"
+                >
+                   {isCheckingPoints ? <Loader2 className="animate-spin w-5 h-5"/> : 'Cek Poin'}
+                </Button>
+              </div>
+              {memberPoints !== null && (
+                 <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-xl flex flex-col sm:flex-row gap-3 sm:items-center justify-between animate-in fade-in duration-300">
+                    <div>
+                       <p className="text-xs font-bold text-blue-800 mb-0.5">Saldo Poin: {memberPoints}</p>
+                       <p className="text-[10px] text-blue-600 font-medium">Earn 1 Poin tiap Rp 10.000</p>
+                    </div>
+                    {memberPoints >= 20 ? (
+                       <label className="flex items-center gap-2 text-[12px] font-bold text-green-700 cursor-pointer bg-white px-3 py-2 rounded-lg border border-green-200 shadow-sm hover:bg-green-50 transition-colors w-full sm:w-auto overflow-hidden">
+                          <input type="checkbox" checked={useLoyalty} onChange={(e) => setUseLoyalty(e.target.checked)} className="w-[18px] h-[18px] shrink-0 rounded text-green-600 focus:ring-green-500 cursor-pointer" />
+                          <span className="leading-none mt-0.5 truncate">Pakai 20 Poin (-10%)</span>
+                       </label>
+                    ) : (
+                       <span className="text-[11px] font-bold text-gray-500 bg-white px-3 py-2 rounded-md border border-gray-200 w-full sm:w-auto text-center truncate">Butuh 20 Poin</span>
+                    )}
+                 </div>
+              )}
             </div>
             <div className="space-y-2.5">
               <Label htmlFor="table" className="text-gray-700 text-[13px] font-bold">Lokasi Meja / Area <span className="text-red-500">*</span></Label>
@@ -255,7 +413,7 @@ export default function CartCheckoutPage() {
               Memproses Pesanan Anda...
             </>
           ) : (
-            `Pesan & Bayar • ${formatPrice(grandTotal)}`
+            `Pesan & Bayar • ${formatPrice(finalGrandTotal)}`
           )}
         </Button>
       </div>

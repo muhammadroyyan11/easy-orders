@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getCurrentBranchId } from '@/lib/branch';
 
 export async function GET() {
   try {
+    const branchId = await getCurrentBranchId();
     const categories = await prisma.category.findMany({
+      where: { branchId },
       orderBy: { createdAt: 'asc' }
     });
     return NextResponse.json(categories);
@@ -14,9 +17,10 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const branchId = await getCurrentBranchId();
     const body = await req.json();
     const newCategory = await prisma.category.create({
-      data: { name: body.name }
+      data: { name: body.name, branchId }
     });
     return NextResponse.json(newCategory, { status: 201 });
   } catch (error: any) {
