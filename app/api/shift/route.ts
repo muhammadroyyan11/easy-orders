@@ -31,8 +31,37 @@ export async function GET(req: Request) {
     const type = searchParams.get('type');
 
     if (type === 'history') {
+       const pageStr = searchParams.get('page');
+       const limitStr = searchParams.get('limit');
+       const search = searchParams.get('search') || '';
+
+       const where: any = { branchId: user.role === 'SUPERADMIN' ? undefined : branchId };
+       
+       if (search) {
+          where.OR = [
+             { cashierName: { contains: search } },
+             { notes: { contains: search } }
+          ];
+       }
+
+       if (pageStr && limitStr) {
+          const page = parseInt(pageStr);
+          const limit = parseInt(limitStr);
+          const [totalRecords, shifts] = await Promise.all([
+             prisma.cashShift.count({ where }),
+             prisma.cashShift.findMany({
+               where,
+               include: { branch: { select: { name: true } } },
+               orderBy: { createdAt: 'desc' },
+               skip: (page - 1) * limit,
+               take: limit
+             })
+          ]);
+          return NextResponse.json({ shifts, totalRecords, totalPages: Math.ceil(totalRecords / limit) });
+       }
+
        const shifts = await prisma.cashShift.findMany({
-         where: { branchId: user.role === 'SUPERADMIN' ? undefined : branchId },
+         where,
          include: { branch: { select: { name: true } } },
          orderBy: { createdAt: 'desc' },
          take: 100

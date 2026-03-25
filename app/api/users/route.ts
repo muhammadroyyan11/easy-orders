@@ -2,8 +2,39 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const pageStr = searchParams.get('page');
+    const limitStr = searchParams.get('limit');
+    const search = searchParams.get('search') || '';
+
+    const where: any = {};
+    if (search) {
+       where.OR = [
+          { name: { contains: search } },
+          { email: { contains: search } }
+       ];
+    }
+
+    if (pageStr && limitStr) {
+       const page = parseInt(pageStr);
+       const limit = parseInt(limitStr);
+       const [totalRecords, users] = await Promise.all([
+          prisma.user.count({ where }),
+          prisma.user.findMany({ 
+             where, 
+             include: { branch: true }, 
+             orderBy: { createdAt: 'desc' },
+             skip: (page - 1) * limit, 
+             take: limit 
+          })
+       ]);
+       
+       const safeUsers = users.map(u => { const { password, ...safe } = u; return safe; });
+       return NextResponse.json({ users: safeUsers, totalRecords, totalPages: Math.ceil(totalRecords/limit) });
+    }
+
     const users = await prisma.user.findMany({
       include: { branch: true },
       orderBy: { createdAt: 'desc' }

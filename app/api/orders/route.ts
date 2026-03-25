@@ -44,13 +44,57 @@ async function autoSyncMidtrans(orders: any[]) {
   return orders;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const branchId = await getCurrentBranchId();
+    const { searchParams } = new URL(req.url);
+    const pageStr = searchParams.get('page');
+    const limitStr = searchParams.get('limit');
+    const search = searchParams.get('search') || '';
+    const payment = searchParams.get('payment') || 'ALL';
+    const status = searchParams.get('status') || 'ALL';
+
+    const where: any = { branchId };
+    
+    if (payment !== 'ALL') where.paymentStatus = payment;
+    if (status !== 'ALL') where.orderStatus = status;
+    if (search) {
+       where.OR = [
+         { orderNumber: { contains: search } },
+         { customerName: { contains: search } }
+       ];
+    }
+
+    if (pageStr && limitStr) {
+       const page = parseInt(pageStr);
+       const limit = parseInt(limitStr);
+       
+       const [totalRecords, agg, ordersRaw] = await Promise.all([
+         prisma.order.count({ where }),
+         prisma.order.aggregate({ where, _sum: { totalAmount: true } }),
+         prisma.order.findMany({
+            where,
+            include: { items: { include: { menuItem: true } } },
+            orderBy: { createdAt: 'desc' },
+            skip: (page - 1) * limit,
+            take: limit
+         })
+       ]);
+
+       const orders = await autoSyncMidtrans(ordersRaw);
+       return NextResponse.json({ 
+         orders, 
+         totalRecords, 
+         grandTotal: agg._sum?.totalAmount || 0,
+         totalPages: Math.ceil(totalRecords / limit) 
+       });
+    }
+
     let orders = await prisma.order.findMany({
       where: { branchId },
       include: { items: { include: { menuItem: true } } },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: 200 // Safety cap against V8 Engine Memory OOM for legacy components
     });
     
     // Fitur Super: Localhost Auto-Polling pengganti Webhook!

@@ -1,15 +1,19 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Lock, Unlock, AlertTriangle, Calculator, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { useDebounce } from '@/lib/useDebounce';
+import { DTWrapper, DTTop, DTBottom, DTTable, dtThClass, dtTdClass, dtTrClass, DTSortArrow } from '@/components/DataTableVanilla';
 
 export default function ShiftPage() {
   const [activeShift, setActiveShift] = useState<any>(null);
   const [expectedCash, setExpectedCash] = useState(0);
   const [cashOrdersTotal, setCashOrdersTotal] = useState(0);
   const [history, setHistory] = useState<any[]>([]);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
 
   // Forms
@@ -21,13 +25,21 @@ export default function ShiftPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  const debouncedSearch = useDebounce(searchTerm, 400);
 
-  const fetchShiftData = async () => {
+  const fetchShiftData = useCallback(async () => {
     setIsLoading(true);
     try {
+      const url = new URL('/api/shift', window.location.origin);
+      url.searchParams.set('type', 'history');
+      url.searchParams.set('page', currentPage.toString());
+      url.searchParams.set('limit', itemsPerPage.toString());
+      if(debouncedSearch) url.searchParams.set('search', debouncedSearch);
+
       const [actRes, histRes] = await Promise.all([
         fetch('/api/shift'),
-        fetch('/api/shift?type=history')
+        fetch(url.toString())
       ]);
       if (actRes.ok) {
         const actData = await actRes.json();
@@ -38,12 +50,17 @@ export default function ShiftPage() {
       if (histRes.ok) {
         const histData = await histRes.json();
         setHistory(histData.shifts || []);
+        if (histData.totalRecords !== undefined) {
+           setTotalRecords(histData.totalRecords);
+           setTotalPages(histData.totalPages);
+        }
       }
     } catch (e) { console.error(e); }
     setIsLoading(false);
-  };
+  }, [currentPage, itemsPerPage, debouncedSearch]);
 
-  useEffect(() => { fetchShiftData(); }, []);
+  useEffect(() => { setCurrentPage(1); }, [debouncedSearch, itemsPerPage]);
+  useEffect(() => { fetchShiftData(); }, [fetchShiftData]);
 
   const handleOpenShift = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,15 +102,6 @@ export default function ShiftPage() {
       }
     } catch (e) { alert("Server error"); }
   };
-
-  // DataTable Logic
-  const filteredHistory = history.filter(h => 
-    (h.user?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (h.branch?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (h.notes || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  const totalPages = Math.ceil(filteredHistory.length / itemsPerPage) || 1;
-  const paginatedHistory = filteredHistory.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const getDiscrepancyBadge = (discrepancy: number) => {
       if (discrepancy === 0) return <Badge className="bg-[#28a745] text-white rounded-[3px] px-2 py-0 border-none text-[10px]">BALANCE</Badge>;
@@ -196,44 +204,29 @@ export default function ShiftPage() {
         </div>
 
         {/* Kolom Kanan: History Table */}
-        <div className="lg:col-span-2 bg-white rounded-[4px] border-t-[3px] border-t-[#17a2b8] shadow-sm w-full overflow-hidden h-fit">
-           <div className="p-4 flex flex-col sm:flex-row justify-between items-center gap-4 border-b border-[#dee2e6]">
-              <div className="flex items-center gap-2 text-[14px] text-[#495057]">
-                 <span>Tampilkan</span>
-                 <select value={itemsPerPage} onChange={e => {setItemsPerPage(Number(e.target.value)); setCurrentPage(1);}} className="border border-[#ced4da] rounded-[3px] px-2 py-1 outline-none focus:border-[#80bdff]">
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                 </select>
-                 <span>entri</span>
-              </div>
-              <div className="flex items-center gap-2 text-[14px] text-[#495057]">
-                 <span>Cari:</span>
-                 <input type="search" value={searchTerm} onChange={e => {setSearchTerm(e.target.value); setCurrentPage(1);}} className="border border-[#ced4da] rounded-[3px] px-3 py-1 outline-none focus:border-[#80bdff]" placeholder="Kasir / Catatan..." />
-              </div>
-           </div>
-
-           <div className="overflow-x-auto">
-             <table className="w-full text-left text-[14px]">
-               <thead className="bg-[#f8f9fa] border-b border-[#dee2e6] text-[#495057]">
+        <div className="lg:col-span-2 bg-white rounded-[4px] border-t-[3px] border-t-[#17a2b8] shadow-sm w-full overflow-hidden h-fit p-4">
+          <DTWrapper>
+             <DTTop itemsPerPage={itemsPerPage} setItemsPerPage={setItemsPerPage} searchTerm={searchTerm} setSearchTerm={setSearchTerm} disabled={isLoading} />
+             <DTTable>
+               <thead>
                  <tr>
-                   <th className="px-4 py-3 font-bold w-[40px] text-center">No.</th>
-                   <th className="px-4 py-3 font-bold">Waktu Buka-Tutup</th>
-                   <th className="px-4 py-3 font-bold">Kasir Penanggungjawab</th>
-                   <th className="px-4 py-3 font-bold text-right">Ekspektasi Uang</th>
-                   <th className="px-4 py-3 font-bold text-center">Selisih</th>
+                   <th className={`${dtThClass} w-[50px] text-center`}>No.<DTSortArrow/></th>
+                   <th className={dtThClass}>Waktu Buka-Tutup<DTSortArrow/></th>
+                   <th className={dtThClass}>Kasir Penanggungjawab<DTSortArrow/></th>
+                   <th className={`${dtThClass} text-right`}>Ekspektasi Uang<DTSortArrow/></th>
+                   <th className={`${dtThClass} text-center pr-[18px]`}>Selisih</th>
                  </tr>
                </thead>
-               <tbody className="divide-y divide-[#dee2e6]">
+               <tbody>
                  {isLoading ? (
                    <tr><td colSpan={5} className="p-8 text-center text-gray-400">Loading Rekapitulasi Shift...</td></tr>
-                 ) : paginatedHistory.length === 0 ? (
+                 ) : history.length === 0 ? (
                    <tr><td colSpan={5} className="p-10 text-center text-gray-500 font-medium">Belum ada riwayat shift atau tidak cocok dengan filter pencarian.</td></tr>
                  ) : (
-                   paginatedHistory.map((h, i) => (
-                     <tr key={h.id} className="hover:bg-[#f2f4f5] transition-colors">
-                       <td className="px-4 py-3 text-center text-gray-500 font-medium">{(currentPage - 1) * itemsPerPage + i + 1}</td>
-                       <td className="px-4 py-3">
+                   history.map((h: any, i: number) => (
+                     <tr key={h.id} className={dtTrClass}>
+                       <td className={`${dtTdClass} text-center text-gray-500 font-medium`}>{(currentPage - 1) * itemsPerPage + i + 1}</td>
+                       <td className={dtTdClass}>
                          <div className="flex flex-col gap-0.5">
                            <span className="text-[#212529] font-bold text-[12px] flex items-center gap-1"><Clock size={10}/> {new Date(h.startTime).toLocaleString('id-ID')}</span>
                            {h.endTime ? (
@@ -243,17 +236,17 @@ export default function ShiftPage() {
                            )}
                          </div>
                        </td>
-                       <td className="px-4 py-3">
-                         <span className="font-bold text-[#007bff] block text-[13px]">{h.user?.name || 'Unknown'}</span>
+                       <td className={dtTdClass}>
+                         <span className="font-bold text-[#007bff] block text-[13px]">{h.cashierName || 'Unknown'}</span>
                          <span className="text-gray-500 text-[11px] block">{h.branch?.name}</span>
                        </td>
-                       <td className="px-4 py-3 text-right">
+                       <td className={`${dtTdClass} text-right`}>
                          <span className="block font-bold text-[13px]">Rp {(h.expectedCash || 0).toLocaleString('id-ID')}</span>
                          {h.endTime && (
                            <span className="block text-[#6c757d] text-[11px]">Aktual: Rp {(h.actualCash || 0).toLocaleString('id-ID')}</span>
                          )}
                        </td>
-                       <td className="px-4 py-3 text-center">
+                       <td className={`${dtTdClass} text-center`}>
                          {h.status === 'CLOSED' ? getDiscrepancyBadge(h.discrepancy || 0) : <span className="text-xs text-gray-400">-</span>}
                          {h.discrepancy !== 0 && h.status === 'CLOSED' && (
                             <span className={`block font-bold mt-1 text-[11px] ${h.discrepancy! > 0 ? 'text-[#17a2b8]' : 'text-[#dc3545]'}`}>
@@ -265,21 +258,12 @@ export default function ShiftPage() {
                    ))
                  )}
                </tbody>
-             </table>
-           </div>
-
-           {totalPages > 0 && (
-              <div className="px-5 py-3 bg-[#f8f9fa] border-t border-[#dee2e6] flex flex-col sm:flex-row items-center justify-between gap-3">
-                 <span className="text-[14px] text-[#212529]">
-                    Menampilkan {!isLoading && filteredHistory.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} sampai {!isLoading ? Math.min(currentPage * itemsPerPage, filteredHistory.length) : 0} dari {!isLoading ? filteredHistory.length : 0} entri {searchTerm && `(difilter)`}
-                 </span>
-                 <div className="flex gap-1">
-                    <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-xs font-bold rounded-[3px] border border-[#ced4da] bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors">Sebelumnya</button>
-                    <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-xs font-bold rounded-[3px] border border-[#ced4da] bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors">Selanjutnya</button>
-                 </div>
-              </div>
-           )}
-
+             </DTTable>
+             
+             {totalPages > 0 && (
+                <DTBottom currentPage={currentPage} totalPages={totalPages} totalRecords={totalRecords} currentRecordsCount={history.length} setCurrentPage={setCurrentPage} itemsPerPage={itemsPerPage} loading={isLoading} isFiltered={!!searchTerm} />
+             )}
+          </DTWrapper>
         </div>
 
       </div>

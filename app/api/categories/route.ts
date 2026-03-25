@@ -2,9 +2,32 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentBranchId } from '@/lib/branch';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const branchId = await getCurrentBranchId();
+    const { searchParams } = new URL(req.url);
+    const pageStr = searchParams.get('page');
+    const limitStr = searchParams.get('limit');
+    const search = searchParams.get('search') || '';
+    
+    const where: any = { branchId };
+    if (search) where.name = { contains: search };
+
+    if (pageStr && limitStr) {
+       const page = parseInt(pageStr);
+       const limit = parseInt(limitStr);
+       const [totalRecords, categories] = await Promise.all([
+         prisma.category.count({ where }),
+         prisma.category.findMany({
+           where,
+           orderBy: { createdAt: 'asc' },
+           skip: (page - 1) * limit,
+           take: limit
+         })
+       ]);
+       return NextResponse.json({ categories, totalRecords, totalPages: Math.ceil(totalRecords / limit) });
+    }
+
     const categories = await prisma.category.findMany({
       where: { branchId },
       orderBy: { createdAt: 'asc' }

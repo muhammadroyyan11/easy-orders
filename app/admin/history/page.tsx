@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Badge } from "@/components/ui/badge";
-import { FileText, FileSpreadsheet, Filter, CheckCircle2, Clock } from 'lucide-react';
+import { FileText, FileSpreadsheet, Filter, Clock } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { useDebounce } from '@/lib/useDebounce';
+import { DTWrapper, DTTop, DTBottom, DTTable, dtThClass, dtTdClass, dtTrClass, DTSortArrow } from '@/components/DataTableVanilla';
 
 export default function HistoryPage() {
   const [orders, setOrders] = useState<any[]>([]);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [grandTotal, setGrandTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   
   // Filters
@@ -18,72 +23,91 @@ export default function HistoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
 
+  const debouncedSearch = useDebounce(searchTerm, 500);
+
   useEffect(() => {
     setCurrentPage(1);
-  }, [paymentFilter, statusFilter, searchTerm, itemsPerPage]);
+  }, [paymentFilter, statusFilter, debouncedSearch, itemsPerPage]);
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const res = await fetch('/api/orders');
-      if (res.ok) setOrders(await res.json());
+      const url = new URL('/api/orders', window.location.origin);
+      url.searchParams.set('page', currentPage.toString());
+      url.searchParams.set('limit', itemsPerPage.toString());
+      url.searchParams.set('payment', paymentFilter);
+      url.searchParams.set('status', statusFilter);
+      if (debouncedSearch) url.searchParams.set('search', debouncedSearch);
+
+      const res = await fetch(url.toString());
+      if (res.ok) {
+         const data = await res.json();
+         setOrders(data.orders);
+         setTotalRecords(data.totalRecords);
+         setGrandTotal(data.grandTotal);
+         setTotalPages(data.totalPages);
+      }
     } catch (error) {
       console.error(error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentPage, itemsPerPage, paymentFilter, statusFilter, debouncedSearch]);
 
   useEffect(() => {
     fetchHistory();
-    const id = setInterval(fetchHistory, 10000);
+    const id = setInterval(fetchHistory, 15000);
     return () => clearInterval(id);
-  }, []);
+  }, [fetchHistory]);
 
-  const filteredOrders = orders.filter(o => {
-    if (paymentFilter !== 'ALL' && o.paymentStatus !== paymentFilter) return false;
-    if (statusFilter !== 'ALL' && o.orderStatus !== statusFilter) return false;
-    if (searchTerm) {
-       const searchLower = searchTerm.toLowerCase();
-       const matchesOrderNumber = (o.orderNumber || o.id).toLowerCase().includes(searchLower);
-       const matchesCustomer = o.customerName.toLowerCase().includes(searchLower);
-       if (!matchesOrderNumber && !matchesCustomer) return false;
+  const exportToExcel = async () => {
+    // Generate full dataset for export by fetching without pagination limits
+    setIsLoading(true);
+    try {
+      const url = new URL('/api/orders', window.location.origin);
+      url.searchParams.set('page', '1');
+      url.searchParams.set('limit', '5000'); // large limit for export
+      url.searchParams.set('payment', paymentFilter);
+      url.searchParams.set('status', statusFilter);
+      if (debouncedSearch) url.searchParams.set('search', debouncedSearch);
+
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error('Export Fetch Error');
+      const data = await res.json();
+      const exportOrders: any[] = data.orders;
+      const exportTotal: number = data.grandTotal;
+
+      const worksheetData = exportOrders.map(o => ({
+        'ID Pesanan': o.orderNumber || o.id.slice(0, 8),
+        'Tanggal Waktu': new Date(o.createdAt).toLocaleString('id-ID'),
+        'Pelanggan': o.customerName,
+        'Meja': o.tableNumber,
+        'Metode Pembayaran': o.paymentMethod.replace('midtrans_', '').toUpperCase(),
+        'Status Bayar': o.paymentStatus,
+        'Status Order': o.orderStatus,
+        'Nominal (Rp)': o.totalAmount
+      }));
+
+      worksheetData.push({
+        'ID Pesanan': 'TOTAL KEUNTUNGAN',
+        'Tanggal Waktu': '',
+        'Pelanggan': '',
+        'Meja': '',
+        'Metode Pembayaran': '',
+        'Status Bayar': '',
+        'Status Order': '',
+        'Nominal (Rp)': exportTotal
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Riwayat Laporan");
+      XLSX.writeFile(workbook, `Laporan_Transaksi_Real_${new Date().getTime()}.xlsx`);
+    } catch (e) {
+      alert("Gagal mengekspor data.");
+    } finally {
+      setIsLoading(false);
     }
-    return true;
-  });
-
-  const grandTotal = filteredOrders.reduce((acc, curr) => acc + curr.totalAmount, 0);
-
-  // Hitung Data Halaman
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
-  const paginatedOrders = filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  const exportToExcel = () => {
-    const worksheetData = filteredOrders.map(o => ({
-      'ID Pesanan': o.orderNumber || o.id.slice(0, 8),
-      'Tanggal Waktu': new Date(o.createdAt).toLocaleString('id-ID'),
-      'Pelanggan': o.customerName,
-      'Meja': o.tableNumber,
-      'Metode Pembayaran': o.paymentMethod.replace('midtrans_', '').toUpperCase(),
-      'Status Bayar': o.paymentStatus,
-      'Status Order': o.orderStatus,
-      'Nominal (Rp)': o.totalAmount
-    }));
-
-    worksheetData.push({
-      'ID Pesanan': 'TOTAL KEUNTUNGAN',
-      'Tanggal Waktu': '',
-      'Pelanggan': '',
-      'Meja': '',
-      'Metode Pembayaran': '',
-      'Status Bayar': '',
-      'Status Order': '',
-      'Nominal (Rp)': grandTotal
-    });
-
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Riwayat Laporan");
-    XLSX.writeFile(workbook, `Laporan_Transaksi_Real_${new Date().getTime()}.xlsx`);
   };
 
   return (
@@ -143,59 +167,37 @@ export default function HistoryPage() {
       </div>
 
       {/* Data Table */}
-      <div className="bg-white rounded-[4px] shadow-sm border border-[#dee2e6] overflow-hidden print:border-none print:shadow-none">
+      <div className="bg-white rounded-[4px] shadow-sm border border-[#dee2e6] overflow-hidden print:border-none print:shadow-none p-4">
         
-        {/* DataTable Top Controls */}
-        <div className="p-4 flex flex-col sm:flex-row justify-between items-center gap-4 border-b border-[#dee2e6] print:hidden">
-           <div className="flex items-center gap-2 text-[14px] text-[#495057]">
-              <span>Tampilkan</span>
-              <select value={itemsPerPage} onChange={e => setItemsPerPage(Number(e.target.value))} className="border border-[#ced4da] rounded-[3px] px-2 py-1 outline-none focus:border-[#80bdff]">
-                 <option value={15}>15</option>
-                 <option value={30}>30</option>
-                 <option value={50}>50</option>
-                 <option value={100}>100</option>
-              </select>
-              <span>entri</span>
-           </div>
-           <div className="flex items-center gap-2 text-[14px] text-[#495057]">
-              <span>Cari:</span>
-              <input type="search" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="border border-[#ced4da] rounded-[3px] px-3 py-1 outline-none focus:border-[#80bdff]" placeholder="ID / Pelanggan..." />
-           </div>
-        </div>
+        <DTWrapper>
+          <div className="print:hidden">
+             <DTTop itemsPerPage={itemsPerPage} setItemsPerPage={setItemsPerPage} searchTerm={searchTerm} setSearchTerm={setSearchTerm} disabled={isLoading} />
+          </div>
 
-         <div className="overflow-x-auto">
-           <table className="w-full text-sm text-left">
-             <thead className="bg-[#f8f9fa] text-[#495057] font-bold border-b border-[#dee2e6] print:bg-gray-100">
-               <tr>
-                 <th className="px-4 py-3 w-[40px] text-center font-bold">#</th>
-                 <th className="px-4 py-3">ID / Waktu</th>
-                 <th className="px-4 py-3">Pelanggan</th>
-                 <th className="px-4 py-3">Metode</th>
-                 <th className="px-4 py-3 text-center">Status Bayar</th>
-                 <th className="px-4 py-3 text-center">Status Order</th>
-                 <th className="px-4 py-3 text-right">Nominal</th>
+          <DTTable>
+             <thead>
+               <tr className="print:bg-gray-100">
+                 <th className={`${dtThClass} w-[50px] text-center`}>#<DTSortArrow/></th>
+                 <th className={dtThClass}>ID / Waktu<DTSortArrow/></th>
+                 <th className={dtThClass}>Pelanggan<DTSortArrow/></th>
+                 <th className={dtThClass}>Metode<DTSortArrow/></th>
+                 <th className={`${dtThClass} text-center`}>Status Bayar<DTSortArrow/></th>
+                 <th className={`${dtThClass} text-center`}>Status Order<DTSortArrow/></th>
+                 <th className={`${dtThClass} text-right pr-[18px]`}>Nominal</th>
                </tr>
              </thead>
-             <tbody className="divide-y divide-[#dee2e6] text-[#212529]">
+             <tbody>
                {isLoading ? (
-                 <tr>
-                   <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                      Memuat data riwayat...
-                   </td>
-                 </tr>
-                ) : paginatedOrders.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                       Tidak ada riwayat transaksi yang cocok dengan filter.
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedOrders.map((order, index) => (
-                    <tr key={order.id} className="hover:bg-[#f8f9fa] print:break-inside-avoid">
-                     <td className="px-4 py-3 text-center font-medium text-gray-500">
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-[#007bff] font-bold border-t border-[#ddd]">Sinkronisasi Database Aktif...</td></tr>
+               ) : orders.length === 0 ? (
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500 font-medium border-t border-[#ddd]">Tidak ada riwayat transaksi yang cocok dengan filter.</td></tr>
+               ) : (
+                 orders.map((order: any, index: number) => (
+                    <tr key={order.id} className={`${dtTrClass} print:break-inside-avoid`}>
+                     <td className={`${dtTdClass} text-center font-medium text-gray-500`}>
                         {(currentPage - 1) * itemsPerPage + index + 1}
                      </td>
-                     <td className="px-4 py-3">
+                     <td className={dtTdClass}>
                        <span className="block font-bold text-[#007bff] print:text-black">
                          #{order.orderNumber?.slice(-8) || order.id.slice(0,8)}
                        </span>
@@ -203,61 +205,41 @@ export default function HistoryPage() {
                          <Clock size={12}/> {new Date(order.createdAt).toLocaleDateString('id-ID')} {new Date(order.createdAt).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}
                        </span>
                      </td>
-                     <td className="px-4 py-3">
+                     <td className={dtTdClass}>
                        <span className="block font-bold">{order.customerName}</span>
                        <span className="text-xs text-gray-500">Meja {order.tableNumber}</span>
                      </td>
-                     <td className="px-4 py-3">
+                     <td className={dtTdClass}>
                        <span className="uppercase text-xs font-bold text-[#495057] bg-[#e9ecef] px-2 py-1 rounded-[3px] border border-[#ced4da] print:border-black">
                          {order.paymentMethod.replace('midtrans_', '')}
                        </span>
                      </td>
-                     <td className="px-4 py-3 text-center">
+                     <td className={`${dtTdClass} text-center`}>
                        <Badge className={`uppercase text-[10px] rounded-[3px] border-0 print:border print:border-black print:text-black ${order.paymentStatus === 'PAID' ? 'bg-[#28a745] hover:bg-[#218838] text-white print:bg-transparent' : 'bg-[#dc3545] hover:bg-[#c82333] text-white print:bg-transparent'}`}>
                          {order.paymentStatus}
                        </Badge>
                      </td>
-                     <td className="px-4 py-3 text-center">
+                     <td className={`${dtTdClass} text-center`}>
                        <Badge variant="outline" className={`uppercase text-[10px] rounded-[3px] print:border-black print:text-black ${order.orderStatus === 'NEW' ? 'text-[#007bff] border-[#007bff]' : order.orderStatus === 'PREPARING' ? 'text-[#17a2b8] border-[#17a2b8]' : 'text-[#6c757d] border-[#6c757d]'}`}>
                          {order.orderStatus}
                        </Badge>
                      </td>
-                     <td className="px-4 py-3 text-right font-black text-[#28a745] print:text-black">
+                     <td className={`${dtTdClass} text-right font-black text-[#28a745] print:text-black`}>
                        Rp {order.totalAmount.toLocaleString('id-ID')}
                      </td>
-                   </tr>
+                    </tr>
                  ))
                )}
              </tbody>
-           </table>
-         </div>
-
-          {/* Pagination Controls */}
+          </DTTable>
+          
           {!isLoading && totalPages > 0 && (
-             <div className="px-5 py-3 border-t border-[#dee2e6] bg-[#f8f9fa] flex flex-col sm:flex-row items-center justify-between gap-3 print:hidden">
-                <span className="text-[14px] text-[#212529]">
-                   Menampilkan {!isLoading && filteredOrders.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} sampai {!isLoading ? Math.min(currentPage * itemsPerPage, filteredOrders.length) : 0} dari {!isLoading ? filteredOrders.length : 0} entri {searchTerm && `(difilter)`}
-                </span>
-                <div className="flex gap-1">
-                  <button 
-                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
-                   disabled={currentPage === 1}
-                   className="px-3 py-1.5 text-xs font-bold rounded-[3px] border border-[#ced4da] bg-white text-[#495057] hover:bg-[#e9ecef] disabled:opacity-50 transition-colors"
-                 >
-                   Sbelumnya
-                 </button>
-                 <button 
-                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
-                   disabled={currentPage === totalPages}
-                   className="px-3 py-1.5 text-xs font-bold rounded-[3px] border border-[#ced4da] bg-white text-[#495057] hover:bg-[#e9ecef] disabled:opacity-50 transition-colors"
-                 >
-                   Selanjutnya
-                 </button>
-               </div>
-             </div>
+            <div className="print:hidden">
+              <DTBottom currentPage={currentPage} totalPages={totalPages} totalRecords={totalRecords} currentRecordsCount={orders.length} setCurrentPage={setCurrentPage} itemsPerPage={itemsPerPage} loading={isLoading} isFiltered={!!searchTerm} />
+            </div>
           )}
-
-       </div>
+        </DTWrapper>
+      </div>
       
     </div>
   );

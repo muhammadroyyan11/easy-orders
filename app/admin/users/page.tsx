@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Input } from "@/components/ui/input";
 import { Edit2, Trash2 } from 'lucide-react';
+import { useDebounce } from '@/lib/useDebounce';
+import { DTWrapper, DTTop, DTBottom, DTTable, dtThClass, dtTdClass, dtTrClass, DTSortArrow } from '@/components/DataTableVanilla';
 
 export default function UsersPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [users, setUsers] = useState<any[]>([]);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [branches, setBranches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -16,25 +20,40 @@ export default function UsersPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   
-  const filteredData = users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.email.toLowerCase().includes(searchTerm.toLowerCase()));
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1;
-  const paginatedUsers = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const debouncedSearch = useDebounce(searchTerm, 400);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
-    const [uRes, bRes] = await Promise.all([fetch('/api/users'), fetch('/api/branches')]);
-    if(uRes.ok) setUsers(await uRes.json());
+    
+    // API URL with pagination explicitly for Users
+    const uUrl = new URL('/api/users', window.location.origin);
+    uUrl.searchParams.set('page', currentPage.toString());
+    uUrl.searchParams.set('limit', itemsPerPage.toString());
+    if(debouncedSearch) uUrl.searchParams.set('search', debouncedSearch);
+
+    const [uRes, bRes] = await Promise.all([fetch(uUrl.toString()), fetch('/api/branches')]);
+    
+    if(uRes.ok) {
+       const uData = await uRes.json();
+       setUsers(Array.isArray(uData.users) ? uData.users : []);
+       if(uData.totalRecords !== undefined) {
+          setTotalRecords(uData.totalRecords);
+          setTotalPages(uData.totalPages);
+       }
+    }
+    
     if(bRes.ok) {
         const bData = await bRes.json();
         setBranches(bData.branches || []);
         if (bData.branches?.length > 0 && !form.branchId) {
-            setForm(prev => ({...prev, branchId: bData.branches[0].id}));
+            setForm(prev => prev.branchId ? prev : ({...prev, branchId: bData.branches[0].id}));
         }
     }
     setLoading(false);
-  };
+  }, [currentPage, itemsPerPage, debouncedSearch, form.branchId]);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { setCurrentPage(1); }, [debouncedSearch, itemsPerPage]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,71 +144,48 @@ export default function UsersPage() {
          </div>
       </div>
 
-      <div className="bg-white rounded-[4px] border-t-[3px] border-t-[#007bff] shadow-sm w-full overflow-hidden">
-        {/* DataTable Top Controls */}
-        <div className="p-4 flex flex-col sm:flex-row justify-between items-center gap-4 border-b border-[#dee2e6]">
-           <div className="flex items-center gap-2 text-[14px] text-[#495057]">
-              <span>Tampilkan</span>
-              <select value={itemsPerPage} onChange={e => {setItemsPerPage(Number(e.target.value)); setCurrentPage(1);}} className="border border-[#ced4da] rounded-[3px] px-2 py-1 outline-none focus:border-[#80bdff]">
-                 <option value={10}>10</option>
-                 <option value={25}>25</option>
-                 <option value={50}>50</option>
-                 <option value={100}>100</option>
-              </select>
-              <span>entri</span>
-           </div>
-           <div className="flex items-center gap-2 text-[14px] text-[#495057]">
-              <span>Cari:</span>
-              <input type="search" value={searchTerm} onChange={e => {setSearchTerm(e.target.value); setCurrentPage(1);}} className="border border-[#ced4da] rounded-[3px] px-3 py-1 outline-none focus:border-[#80bdff]" placeholder="Ketik kata kunci..." disabled={loading}/>
-           </div>
-        </div>
-
-        <table className="w-full text-left text-[14px]">
-          <thead className="bg-white border-b border-[#dee2e6] text-[#495057]">
-            <tr>
-              <th className="px-5 py-3.5 font-bold w-[50px] text-center">No.</th>
-              <th className="px-5 py-3.5 font-bold">Nama Pegawai</th>
-              <th className="px-5 py-3.5 hidden sm:table-cell font-bold">Email Institusi</th>
-              <th className="px-5 py-3.5 font-bold">Role Akses</th>
-              <th className="px-5 py-3.5 hidden md:table-cell font-bold">Cabang Penempatan</th>
-              <th className="px-5 py-3.5 text-right font-bold w-[120px]">Operasi</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#dee2e6]">
-            {paginatedUsers.map((u, index) => (
-              <tr key={u.id} className="hover:bg-[#f2f4f5] transition-colors">
-                <td className="px-5 py-3.5 text-[#212529] font-medium text-center">{(currentPage - 1) * itemsPerPage + index + 1}</td>
-                <td className="px-5 py-3.5 text-[#212529] font-medium">{u.name}</td>
-                <td className="px-5 py-3.5 text-[#007bff] hidden sm:table-cell hover:underline cursor-pointer">{u.email}</td>
-                <td className="px-5 py-3.5 text-[#212529] font-medium">
-                   <span className={`px-2 py-1 rounded-[3px] text-[11px] font-bold uppercase ${u.role === 'SUPERADMIN' ? 'bg-[#dc3545] text-white' : u.role === 'ADMIN' ? 'bg-[#ffc107] text-[#212529]' : 'bg-[#28a745] text-white'}`}>{u.role}</span>
-                </td>
-                <td className="px-5 py-3.5 text-[#6c757d] hidden md:table-cell">
-                   {u.branch ? u.branch.name : <span className="text-[#dc3545] font-semibold italic">Semua Akses (HQ)</span>}
-                </td>
-                <td className="px-5 py-3.5 text-right">
-                   <button onClick={() => handleEdit(u)} className="bg-[#17a2b8] text-white p-1.5 px-2.5 rounded-[3px] hover:bg-[#138496] transition-colors inline-block mr-1"><Edit2 size={14}/></button>
-                   <button onClick={() => handleDelete(u.id, u.role)} className="bg-[#dc3545] text-white p-1.5 px-2.5 rounded-[3px] hover:bg-[#c82333] transition-colors inline-block"><Trash2 size={14}/></button>
-                </td>
+      <div className="bg-white rounded-[4px] border-t-[3px] border-t-[#007bff] shadow-sm w-full overflow-hidden p-4">
+        <DTWrapper>
+          <DTTop itemsPerPage={itemsPerPage} setItemsPerPage={setItemsPerPage} searchTerm={searchTerm} setSearchTerm={setSearchTerm} disabled={loading} />
+          <DTTable>
+            <thead>
+              <tr>
+                <th className={`${dtThClass} w-[50px] text-center`}>No.<DTSortArrow/></th>
+                <th className={dtThClass}>Nama Pegawai<DTSortArrow/></th>
+                <th className={`${dtThClass} hidden sm:table-cell`}>Email Institusi<DTSortArrow/></th>
+                <th className={dtThClass}>Role Akses<DTSortArrow/></th>
+                <th className={`${dtThClass} hidden md:table-cell`}>Cabang Penempatan<DTSortArrow/></th>
+                <th className={`${dtThClass} text-right w-[120px] pr-[18px]`}>Operasi</th>
               </tr>
-            ))}
-            {!loading && filteredData.length === 0 && (
-               <tr><td colSpan={6} className="p-10 text-center text-gray-400">Pencarian tidak menemukan hasil (atau database kosong)</td></tr>
-            )}
-          </tbody>
-        </table>
-
-        {totalPages > 0 && (
-           <div className="px-5 py-3 bg-[#f8f9fa] border-t border-[#dee2e6] flex flex-col sm:flex-row items-center justify-between gap-3">
-              <span className="text-[14px] text-[#212529]">
-                 Menampilkan {!loading && filteredData.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} sampai {!loading ? Math.min(currentPage * itemsPerPage, filteredData.length) : 0} dari {!loading ? filteredData.length : 0} entri {searchTerm && `(difilter dari ${users.length} total entri)`}
-              </span>
-              <div className="flex gap-1">
-                 <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-xs font-bold rounded-[3px] border border-[#ced4da] bg-white hover:bg-gray-50 disabled:opacity-50">Mundur</button>
-                 <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-xs font-bold rounded-[3px] border border-[#ced4da] bg-white hover:bg-gray-50 disabled:opacity-50">Maju</button>
-              </div>
-           </div>
-        )}
+            </thead>
+            <tbody>
+              {users.map((u, index) => (
+                <tr key={u.id} className={dtTrClass}>
+                  <td className={`${dtTdClass} text-center`}>{(currentPage - 1) * itemsPerPage + index + 1}</td>
+                  <td className={dtTdClass}>{u.name}</td>
+                  <td className={`${dtTdClass} text-[#007bff] hidden sm:table-cell hover:underline cursor-pointer`}>{u.email}</td>
+                  <td className={dtTdClass}>
+                     <span className={`px-2 py-1 rounded-[3px] text-[11px] font-bold uppercase ${u.role === 'SUPERADMIN' ? 'bg-[#dc3545] text-white' : u.role === 'ADMIN' ? 'bg-[#ffc107] text-[#212529]' : 'bg-[#28a745] text-white'}`}>{u.role}</span>
+                  </td>
+                  <td className={`${dtTdClass} text-[#6c757d] hidden md:table-cell`}>
+                     {u.branch ? u.branch.name : <span className="text-[#dc3545] font-semibold italic">Semua Akses (HQ)</span>}
+                  </td>
+                  <td className={`${dtTdClass} text-right`}>
+                     <button onClick={() => handleEdit(u)} className="bg-[#17a2b8] text-white p-1.5 px-2.5 rounded-[3px] hover:bg-[#138496] transition-colors inline-block mr-1"><Edit2 size={14}/></button>
+                     <button onClick={() => handleDelete(u.id, u.role)} className="bg-[#dc3545] text-white p-1.5 px-2.5 rounded-[3px] hover:bg-[#c82333] transition-colors inline-block"><Trash2 size={14}/></button>
+                  </td>
+                </tr>
+              ))}
+              {!loading && users.length === 0 && (
+                 <tr><td colSpan={6} className="p-10 text-center text-gray-500 font-medium">Pencarian tidak menemukan hasil (atau database kosong)</td></tr>
+              )}
+            </tbody>
+          </DTTable>
+          
+          {totalPages > 0 && (
+            <DTBottom currentPage={currentPage} totalPages={totalPages} totalRecords={totalRecords} currentRecordsCount={users.length} setCurrentPage={setCurrentPage} itemsPerPage={itemsPerPage} loading={loading} isFiltered={!!searchTerm} />
+          )}
+        </DTWrapper>
       </div>
     </div>
   );

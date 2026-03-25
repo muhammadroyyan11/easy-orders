@@ -2,8 +2,31 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentBranchId } from '@/lib/branch';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const pageStr = searchParams.get('page');
+    const limitStr = searchParams.get('limit');
+    const search = searchParams.get('search') || '';
+
+    const where: any = {};
+    if (search) {
+       where.OR = [
+          { name: { contains: search } },
+          { address: { contains: search } }
+       ];
+    }
+
+    if (pageStr && limitStr) {
+       const page = parseInt(pageStr);
+       const limit = parseInt(limitStr);
+       const [totalRecords, branches] = await Promise.all([
+          prisma.branch.count({ where }),
+          prisma.branch.findMany({ where, orderBy: { name: 'asc' }, skip: (page - 1) * limit, take: limit })
+       ]);
+       return NextResponse.json({ branches, totalRecords, totalPages: Math.ceil(totalRecords/limit) });
+    }
+
     const branches = await prisma.branch.findMany({ orderBy: { name: 'asc' } });
     const currentBranchId = await getCurrentBranchId();
     return NextResponse.json({ branches, currentBranchId });
